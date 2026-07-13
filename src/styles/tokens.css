@@ -31,9 +31,8 @@
     --leading-relaxed: 1.75;
 
     /*== 圆角 ==*/
-    --radius-none: 0; /* 直角 */
+    --radius: 0; /* 全站零圆角，矩形是品牌语言 */
     --radius-sm: 0.125rem; /* 2px */
-    --radius: 0.375rem; /* 6px */
     --radius-md: 0.5rem; /* 8px */
     --radius-lg: 0.75rem; /* 12px */
 }

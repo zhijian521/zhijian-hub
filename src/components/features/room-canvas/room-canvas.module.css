@@ -1,0 +1,130 @@
+/*============================================================================
+  room-canvas styles — 画板组件样式
+
+  使用主题变量（theme.css）和设计令牌（tokens.css）
+  零圆角矩形语言，中国风简约配色
+============================================================================*/
+
+/*== 画板区域 ==*/
+.canvas {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--background);
+    cursor: crosshair;
+    user-select: none;
+}
+
+/*== 空状态提示 ==*/
+.emptyHint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: var(--text-lg);
+    color: var(--muted-foreground);
+    pointer-events: none;
+    user-select: none;
+}
+
+/*== 房间矩形 ==*/
+.room {
+    position: absolute;
+    border: 2px solid color-mix(in srgb, var(--primary) 50%, transparent);
+    background: color-mix(in srgb, var(--primary) 5%, transparent);
+    cursor: move;
+    z-index: 1;
+}
+
+/*-- 选中状态：朱砂红边框 + 阴影 --*/
+.roomSelected {
+    border-color: var(--primary);
+    box-shadow: var(--shadow);
+    z-index: 2;
+}
+
+/*== 房间标签 ==*/
+.roomLabel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+}
+
+/*== 绘制预览 ==*/
+.preview {
+    position: absolute;
+    border: 2px dashed var(--primary);
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+    pointer-events: none;
+    z-index: 3;
+}
+
+/*== 缩放手柄基础样式 ==*/
+.handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: var(--primary);
+    border: 1px solid var(--surface);
+    z-index: 4;
+}
+
+/*-- 八方向手柄定位 --*/
+.handleNW {
+    top: -5px;
+    left: -5px;
+    cursor: nwse-resize;
+}
+
+.handleN {
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+}
+
+.handleNE {
+    top: -5px;
+    right: -5px;
+    cursor: nesw-resize;
+}
+
+.handleE {
+    top: 50%;
+    right: -5px;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+}
+
+.handleSE {
+    bottom: -5px;
+    right: -5px;
+    cursor: nwse-resize;
+}
+
+.handleS {
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+}
+
+.handleSW {
+    bottom: -5px;
+    left: -5px;
+    cursor: nesw-resize;
+}
+
+.handleW {
+    top: 50%;
+    left: -5px;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+}

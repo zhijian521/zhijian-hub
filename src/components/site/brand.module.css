@@ -1,0 +1,22 @@
+/*============================================================================
+  brand styles — 品牌标识样式
+============================================================================*/
+
+.brand {
+    position: absolute;
+    top: var(--space-4);
+    left: var(--space-5);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    pointer-events: none;
+}
+
+.name {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    font-family: var(--font-serif);
+    color: var(--foreground);
+    letter-spacing: 0.05em;
+}
