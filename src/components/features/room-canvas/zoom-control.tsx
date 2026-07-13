@@ -31,19 +31,9 @@ const MAX_ZOOM = 2.0;
 export function ZoomControl({ zoom, onZoomIn, onZoomOut }: ZoomControlProps) {
     return (
         <div className={styles.container}>
-            <IconButton
-                icon={<MinusIcon />}
-                onClick={onZoomOut}
-                disabled={zoom <= MIN_ZOOM}
-                aria-label="缩小"
-            />
+            <IconButton icon={<MinusIcon />} onClick={onZoomOut} disabled={zoom <= MIN_ZOOM} aria-label="缩小" />
             <span className={styles.label}>{Math.round(zoom * 100)}%</span>
-            <IconButton
-                icon={<PlusIcon />}
-                onClick={onZoomIn}
-                disabled={zoom >= MAX_ZOOM}
-                aria-label="放大"
-            />
+            <IconButton icon={<PlusIcon />} onClick={onZoomIn} disabled={zoom >= MAX_ZOOM} aria-label="放大" />
         </div>
     );
 }

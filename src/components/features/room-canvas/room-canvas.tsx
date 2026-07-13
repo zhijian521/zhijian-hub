@@ -7,7 +7,7 @@
   交互模式：空白处拖拽绘制 / 点击房间选中移动 / 拖手柄缩放
   右键菜单：空白处清空画板 / 房间上修改名称、删除房间
   顶部工具栏：选取（拖拽画布）/ 创建房间
-  缩放控制：Ctrl+滚轮 / 右下角 ZoomControl
+  缩放控制：滚轮 / 右下角 ZoomControl
 ============================================================================*/
 
 /*== 组件导入 ==*/
@@ -195,12 +195,7 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
 
             {/*== 右键菜单 ==*/}
             {contextMenu && (
-                <ContextMenu
-                    x={contextMenu.x}
-                    y={contextMenu.y}
-                    items={contextMenuItems}
-                    onClose={closeContextMenu}
-                />
+                <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
             )}
 
             {/*== 重命名弹窗 ==*/}

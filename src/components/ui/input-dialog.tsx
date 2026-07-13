@@ -30,14 +30,7 @@ interface InputDialogProps {
 }
 
 /*== InputDialog 输入弹窗 — 基于 Dialog+Button ==*/
-export function InputDialog({
-    open,
-    title,
-    placeholder,
-    initialValue = '',
-    onConfirm,
-    onClose,
-}: InputDialogProps) {
+export function InputDialog({ open, title, placeholder, initialValue = '', onConfirm, onClose }: InputDialogProps) {
     const [value, setValue] = useState(initialValue);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -84,12 +77,7 @@ export function InputDialog({
                 <Button size="small" onClick={onClose}>
                     取消
                 </Button>
-                <Button
-                    variant="primary"
-                    size="small"
-                    disabled={!value.trim()}
-                    onClick={handleConfirm}
-                >
+                <Button variant="primary" size="small" disabled={!value.trim()} onClick={handleConfirm}>
                     确认
                 </Button>
             </div>

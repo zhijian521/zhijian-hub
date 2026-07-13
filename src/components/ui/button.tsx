@@ -39,18 +39,9 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
 };
 
 /*== Button 通用按钮 ==*/
-export function Button({
-    variant = 'ghost',
-    size = 'medium',
-    className,
-    children,
-    ...props
-}: ButtonProps) {
+export function Button({ variant = 'ghost', size = 'medium', className, children, ...props }: ButtonProps) {
     return (
-        <button
-            className={cn(styles.btn, VARIANT_CLASS[variant], SIZE_CLASS[size], className)}
-            {...props}
-        >
+        <button className={cn(styles.btn, VARIANT_CLASS[variant], SIZE_CLASS[size], className)} {...props}>
             {children}
         </button>
     );

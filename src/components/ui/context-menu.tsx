@@ -77,11 +77,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     }, [onClose]);
 
     return (
-        <div
-            ref={menuRef}
-            className={styles.menu}
-            style={{ left: x, top: y }}
-        >
+        <div ref={menuRef} className={styles.menu} style={{ left: x, top: y }}>
             {items.map((entry, index) => {
                 if (isSeparator(entry)) {
                     return <div key={`sep-${index}`} className={styles.separator} />;
@@ -90,7 +86,11 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
                 return (
                     <button
                         key={`${entry.label}-${index}`}
-                        className={cn(styles.item, entry.danger && styles.itemDanger, entry.disabled && styles.itemDisabled)}
+                        className={cn(
+                            styles.item,
+                            entry.danger && styles.itemDanger,
+                            entry.disabled && styles.itemDisabled
+                        )}
                         disabled={entry.disabled}
                         onClick={() => {
                             entry.onClick();

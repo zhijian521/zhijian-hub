@@ -391,17 +391,45 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         if (id) deleteRoom(id);
     });
 
-    /*== 滚轮缩放：Ctrl+滚轮 ==*/
-    const handleWheel = useCallback((e: React.WheelEvent) => {
-        if (!e.ctrlKey) return;
-        e.preventDefault();
-        const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
-        setZoom((z) => clampZoom(z + delta));
+    /*== 以画布视口中心为锚点缩放，保持中心内容不偏移 ==*/
+    const setZoomAtCanvasCenter = useCallback((nextZoom: number) => {
+        const currentZoom = zoomRef.current;
+        const zoom = clampZoom(nextZoom);
+        if (zoom === currentZoom) return;
+
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const { width, height } = canvas.getBoundingClientRect();
+            const currentPan = panOffsetRef.current;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const worldX = (centerX - currentPan.x) / currentZoom;
+            const worldY = (centerY - currentPan.y) / currentZoom;
+            const nextPan = {
+                x: centerX - worldX * zoom,
+                y: centerY - worldY * zoom,
+            };
+
+            panOffsetRef.current = nextPan;
+            setPanOffset(nextPan);
+        }
+
+        zoomRef.current = zoom;
+        setZoom(zoom);
     }, []);
 
+    /*== 滚轮缩放：直接滚动，不触发浏览器默认行为 ==*/
+    const handleWheel = useCallback(
+        (e: React.WheelEvent) => {
+            e.preventDefault();
+            setZoomAtCanvasCenter(zoomRef.current + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
+        },
+        [setZoomAtCanvasCenter]
+    );
+
     /*== ZoomControl 按钮缩放 ==*/
-    const zoomIn = useCallback(() => setZoom((z) => clampZoom(z + ZOOM_STEP)), []);
-    const zoomOut = useCallback(() => setZoom((z) => clampZoom(z - ZOOM_STEP)), []);
+    const zoomIn = useCallback(() => setZoomAtCanvasCenter(zoomRef.current + ZOOM_STEP), [setZoomAtCanvasCenter]);
+    const zoomOut = useCallback(() => setZoomAtCanvasCenter(zoomRef.current - ZOOM_STEP), [setZoomAtCanvasCenter]);
 
     return {
         rooms,
