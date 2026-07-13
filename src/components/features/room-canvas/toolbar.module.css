@@ -1,0 +1,63 @@
+/*============================================================================
+  toolbar styles — 顶部工具栏样式
+
+  固定在画板顶部居中，半透明白底浮层
+============================================================================*/
+
+.container {
+    position: absolute;
+    top: var(--space-4);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    border: 1px solid var(--border);
+    background: var(--popover);
+    box-shadow: var(--shadow-sm);
+    user-select: none;
+}
+
+/*== 工具按钮 ==*/
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--space-6);
+    height: var(--space-6);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.button > svg {
+    flex-shrink: 0;
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+.button:hover {
+    color: var(--primary);
+    border-color: var(--border);
+}
+
+/*-- 激活状态：朱砂红填充 --*/
+.buttonActive {
+    color: var(--primary-foreground);
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.buttonActive:hover {
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+}
+
+.button:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: var(--focus-offset);
+}

@@ -1,0 +1,39 @@
+/*============================================================================
+  icon-button styles — 图标按钮样式
+
+  正方形纯图标，hover 变色
+============================================================================*/
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--space-6);
+    height: var(--space-6);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--foreground);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.button > svg {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+}
+
+.button:hover:not(:disabled) {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.button:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: var(--focus-offset);
+}

@@ -6,6 +6,8 @@
   点阵背景画板，支持绘制矩形房间、拖拽移动、八方向缩放
   交互模式：空白处拖拽绘制 / 点击房间选中移动 / 拖手柄缩放
   右键菜单：空白处清空画板 / 房间上修改名称、删除房间
+  顶部工具栏：选取（拖拽画布）/ 创建房间
+  缩放控制：Ctrl+滚轮 / 右下角 ZoomControl
 ============================================================================*/
 
 /*== 组件导入 ==*/
@@ -18,6 +20,10 @@ import { Show } from '@/components/ui/show';
 import { cn } from '@/lib/utils/cn';
 import { useRoomCanvas } from '@/lib/hooks/use-room-canvas';
 import type { ResizeHandle } from '@/lib/types/room-canvas';
+
+/*== 同目录组件 ==*/
+import { Toolbar } from './toolbar';
+import { ZoomControl } from './zoom-control';
 
 /*== 样式导入 ==*/
 import styles from './room-canvas.module.css';
@@ -39,18 +45,25 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
         interaction,
         contextMenu,
         renamingId,
+        zoom,
+        panOffset,
+        tool,
         canvasRef,
         handleCanvasMouseDown,
         handleRoomMouseDown,
         handleHandleMouseDown,
         handleCanvasContextMenu,
         handleRoomContextMenu,
+        handleWheel,
         closeContextMenu,
         deleteRoom,
         clearAll,
         startRename,
         confirmRename,
         cancelRename,
+        zoomIn,
+        zoomOut,
+        setTool,
     } = useRoomCanvas({ gridSize });
 
     /*== 绘制预览矩形 ==*/
@@ -101,66 +114,83 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
         <>
             <div
                 ref={canvasRef}
-                className={styles.canvas}
+                className={cn(styles.canvas, tool === 'select' && styles.canvasSelect)}
                 onMouseDown={handleCanvasMouseDown}
                 onContextMenu={handleCanvasContextMenu}
+                onWheel={handleWheel}
                 style={{
                     backgroundImage: `radial-gradient(circle, var(--border) 1px, transparent 1px)`,
-                    backgroundSize: `${gridSize}px ${gridSize}px`,
+                    backgroundSize: `${gridSize * zoom}px ${gridSize * zoom}px`,
+                    backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
                 }}
             >
+                {/*== 房间缩放容器 ==*/}
+                <div
+                    className={styles.zoomLayer}
+                    style={{
+                        transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+                        transformOrigin: '0 0',
+                    }}
+                >
+                    {/*== 空状态提示 ==*/}
+                    <Show when={rooms.length === 0 && interaction.type === 'idle' && tool === 'room'}>
+                        <div className={styles.emptyHint}>点击空白处拖拽，绘制房间</div>
+                    </Show>
+
+                    {/*== 房间矩形 ==*/}
+                    {rooms.map((room) => {
+                        const isSelected = room.id === selectedId;
+                        return (
+                            <div
+                                key={room.id}
+                                className={cn(styles.room, isSelected && styles.roomSelected)}
+                                style={{
+                                    left: room.x,
+                                    top: room.y,
+                                    width: room.width,
+                                    height: room.height,
+                                }}
+                                onMouseDown={(e) => handleRoomMouseDown(e, room)}
+                                onContextMenu={(e) => handleRoomContextMenu(e, room)}
+                            >
+                                <span className={styles.roomLabel}>{room.name}</span>
+
+                                {/*== 选中时显示八方向缩放手柄 ==*/}
+                                <Show when={isSelected}>
+                                    {HANDLES.map((handle) => (
+                                        <div
+                                            key={handle}
+                                            className={cn(styles.handle, styles[`handle${handle.toUpperCase()}`])}
+                                            onMouseDown={(e) => handleHandleMouseDown(e, handle)}
+                                        />
+                                    ))}
+                                </Show>
+                            </div>
+                        );
+                    })}
+
+                    {/*== 绘制预览 ==*/}
+                    {preview && preview.width > 0 && preview.height > 0 && (
+                        <div
+                            className={styles.preview}
+                            style={{
+                                left: preview.x,
+                                top: preview.y,
+                                width: preview.width,
+                                height: preview.height,
+                            }}
+                        />
+                    )}
+                </div>
+
+                {/*== 顶部工具栏 ==*/}
+                <Toolbar tool={tool} onToolChange={setTool} />
+
                 {/*== 左上角品牌标识 ==*/}
                 <Brand />
 
-                {/*== 空状态提示 ==*/}
-                <Show when={rooms.length === 0 && interaction.type === 'idle'}>
-                    <div className={styles.emptyHint}>点击空白处拖拽，绘制房间</div>
-                </Show>
-
-                {/*== 房间矩形 ==*/}
-                {rooms.map((room) => {
-                    const isSelected = room.id === selectedId;
-                    return (
-                        <div
-                            key={room.id}
-                            className={cn(styles.room, isSelected && styles.roomSelected)}
-                            style={{
-                                left: room.x,
-                                top: room.y,
-                                width: room.width,
-                                height: room.height,
-                            }}
-                            onMouseDown={(e) => handleRoomMouseDown(e, room)}
-                            onContextMenu={(e) => handleRoomContextMenu(e, room)}
-                        >
-                            <span className={styles.roomLabel}>{room.name}</span>
-
-                            {/*== 选中时显示八方向缩放手柄 ==*/}
-                            <Show when={isSelected}>
-                                {HANDLES.map((handle) => (
-                                    <div
-                                        key={handle}
-                                        className={cn(styles.handle, styles[`handle${handle.toUpperCase()}`])}
-                                        onMouseDown={(e) => handleHandleMouseDown(e, handle)}
-                                    />
-                                ))}
-                            </Show>
-                        </div>
-                    );
-                })}
-
-                {/*== 绘制预览 ==*/}
-                {preview && preview.width > 0 && preview.height > 0 && (
-                    <div
-                        className={styles.preview}
-                        style={{
-                            left: preview.x,
-                            top: preview.y,
-                            width: preview.width,
-                            height: preview.height,
-                        }}
-                    />
-                )}
+                {/*== 右下角缩放控制 ==*/}
+                <ZoomControl zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} />
             </div>
 
             {/*== 右键菜单 ==*/}

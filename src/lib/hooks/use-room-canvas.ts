@@ -4,7 +4,7 @@
   use-room-canvas — 画板交互逻辑 Hook
 
   职责：管理房间列表状态、鼠标绘制/移动/缩放交互、键盘快捷键、
-        右键菜单状态、重命名/删除/清空操作
+        右键菜单状态、重命名/删除/清空操作、画板缩放
   不负责渲染，只提供数据和事件回调
 ============================================================================*/
 
@@ -15,7 +15,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useKeyPress } from '@/lib/hooks/use-key-press';
 
 /*== 类型导入 ==*/
-import type { Room, ResizeHandle, InteractionState, Rect, ContextMenuState } from '@/lib/types/room-canvas';
+import type { Room, ResizeHandle, InteractionState, Rect, ContextMenuState, Tool } from '@/lib/types/room-canvas';
 
 /*== Hook 配置 ==*/
 interface UseRoomCanvasOptions {
@@ -32,22 +32,39 @@ interface UseRoomCanvasReturn {
     interaction: InteractionState;
     contextMenu: ContextMenuState | null;
     renamingId: string | null;
+    zoom: number;
+    panOffset: { x: number; y: number };
+    tool: Tool;
     canvasRef: React.RefObject<HTMLDivElement | null>;
     handleCanvasMouseDown: (e: React.MouseEvent) => void;
     handleRoomMouseDown: (e: React.MouseEvent, room: Room) => void;
     handleHandleMouseDown: (e: React.MouseEvent, handle: ResizeHandle) => void;
     handleCanvasContextMenu: (e: React.MouseEvent) => void;
     handleRoomContextMenu: (e: React.MouseEvent, room: Room) => void;
+    handleWheel: (e: React.WheelEvent) => void;
     closeContextMenu: () => void;
     deleteRoom: (id: string) => void;
     clearAll: () => void;
     startRename: (id: string) => void;
     confirmRename: (name: string) => void;
     cancelRename: () => void;
+    zoomIn: () => void;
+    zoomOut: () => void;
+    setTool: (tool: Tool) => void;
 }
 
 /*== 最小房间尺寸（像素） ==*/
 const MIN_ROOM_SIZE = 20;
+
+/*== 缩放范围与步进 ==*/
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2.0;
+const ZOOM_STEP = 0.1;
+
+/*== 缩放钳制函数 ==*/
+function clampZoom(z: number): number {
+    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+}
 
 /*============================================================================
   computeResizedRect — 根据手柄方向和鼠标位置计算新矩形
@@ -107,12 +124,18 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [zoom, setZoom] = useState(1);
+    const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+    const [tool, setTool] = useState<Tool>('room');
 
     /*== Refs：避免事件监听器闭包过期 ==*/
     const canvasRef = useRef<HTMLDivElement>(null);
     const interactionRef = useRef(interaction);
     const roomsRef = useRef(rooms);
     const selectedIdRef = useRef(selectedId);
+    const toolRef = useRef(tool);
+    const panOffsetRef = useRef(panOffset);
+    const zoomRef = useRef(zoom);
     const roomCounter = useRef(0);
 
     useEffect(() => {
@@ -124,6 +147,15 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     useEffect(() => {
         selectedIdRef.current = selectedId;
     }, [selectedId]);
+    useEffect(() => {
+        toolRef.current = tool;
+    }, [tool]);
+    useEffect(() => {
+        panOffsetRef.current = panOffset;
+    }, [panOffset]);
+    useEffect(() => {
+        zoomRef.current = zoom;
+    }, [zoom]);
 
     /*== 网格吸附 ==*/
     const snap = useCallback(
@@ -134,14 +166,16 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         [gridSize, snapToGrid]
     );
 
-    /*== 鼠标坐标 → 画板坐标 ==*/
+    /*== 鼠标坐标 → 画板坐标（考虑缩放和平移） ==*/
     const getCoords = useCallback((e: MouseEvent | React.MouseEvent) => {
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0 };
         const rect = canvas.getBoundingClientRect();
+        const viewX = e.clientX - rect.left;
+        const viewY = e.clientY - rect.top;
         return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
+            x: (viewX - panOffsetRef.current.x) / zoomRef.current,
+            y: (viewY - panOffsetRef.current.y) / zoomRef.current,
         };
     }, []);
 
@@ -150,10 +184,27 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         return `room-${Date.now()}-${++roomCounter.current}`;
     }, []);
 
-    /*== 画板鼠标按下：开始绘制 ==*/
+    /*== 画板鼠标按下：根据当前工具决定行为 ==*/
     const handleCanvasMouseDown = useCallback(
         (e: React.MouseEvent) => {
             if (e.button !== 0) return;
+
+            /*-- 选取工具：开始拖拽画布 --*/
+            if (toolRef.current === 'select') {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                setInteraction({
+                    type: 'panning',
+                    startMouseX: e.clientX - rect.left,
+                    startMouseY: e.clientY - rect.top,
+                    panStartX: panOffsetRef.current.x,
+                    panStartY: panOffsetRef.current.y,
+                });
+                return;
+            }
+
+            /*-- 房间工具：开始绘制矩形 --*/
             const { x, y } = getCoords(e);
             const sx = snap(x);
             const sy = snap(y);
@@ -225,6 +276,16 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
             } else if (current.type === 'resizing') {
                 const newRect = computeResizedRect(current.handle, current.startRect, sx, sy);
                 setRooms((prev) => prev.map((r) => (r.id === current.id ? { ...r, ...newRect } : r)));
+            } else if (current.type === 'panning') {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                const viewX = e.clientX - rect.left;
+                const viewY = e.clientY - rect.top;
+                setPanOffset({
+                    x: current.panStartX + (viewX - current.startMouseX),
+                    y: current.panStartY + (viewY - current.startMouseY),
+                });
             }
         };
 
@@ -330,23 +391,42 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         if (id) deleteRoom(id);
     });
 
+    /*== 滚轮缩放：Ctrl+滚轮 ==*/
+    const handleWheel = useCallback((e: React.WheelEvent) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+        setZoom((z) => clampZoom(z + delta));
+    }, []);
+
+    /*== ZoomControl 按钮缩放 ==*/
+    const zoomIn = useCallback(() => setZoom((z) => clampZoom(z + ZOOM_STEP)), []);
+    const zoomOut = useCallback(() => setZoom((z) => clampZoom(z - ZOOM_STEP)), []);
+
     return {
         rooms,
         selectedId,
         interaction,
         contextMenu,
         renamingId,
+        zoom,
+        panOffset,
+        tool,
         canvasRef,
         handleCanvasMouseDown,
         handleRoomMouseDown,
         handleHandleMouseDown,
         handleCanvasContextMenu,
         handleRoomContextMenu,
+        handleWheel,
         closeContextMenu,
         deleteRoom,
         clearAll,
         startRename,
         confirmRename,
         cancelRename,
+        zoomIn,
+        zoomOut,
+        setTool,
     };
 }

@@ -4,6 +4,9 @@
   房间矩形数据模型 + 交互状态联合类型 + 右键菜单状态
 ============================================================================*/
 
+/*== 工具类型：选取（拖拽画布）/ 创建房间 ==*/
+export type Tool = 'select' | 'room';
+
 /*== 房间矩形 ==*/
 export interface Room {
     /*-- 唯一标识 --*/
@@ -23,7 +26,7 @@ export interface Room {
 /*== 缩放手柄方位 ==*/
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
-/*== 交互状态：空闲 / 绘制中 / 移动中 / 缩放中 ==*/
+/*== 交互状态：空闲 / 绘制中 / 移动中 / 缩放中 / 拖拽画布 ==*/
 export type InteractionState =
     | { type: 'idle' }
     | {
@@ -46,6 +49,15 @@ export type InteractionState =
           handle: ResizeHandle;
           /*-- 缩放起始时的房间矩形 --*/
           startRect: { x: number; y: number; width: number; height: number };
+      }
+    | {
+          type: 'panning';
+          /*-- 鼠标按下时的视口坐标 --*/
+          startMouseX: number;
+          startMouseY: number;
+          /*-- 拖拽开始时的画布偏移 --*/
+          panStartX: number;
+          panStartY: number;
       };
 
 /*== 右键菜单状态 ==*/

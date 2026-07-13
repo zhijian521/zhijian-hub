@@ -1,0 +1,28 @@
+/*============================================================================
+  zoom-control styles — 缩放控制样式
+
+  固定在画板右下角，半透明白底浮层
+============================================================================*/
+
+.container {
+    position: absolute;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border);
+    background: var(--popover);
+    box-shadow: var(--shadow-sm);
+    user-select: none;
+}
+
+.label {
+    min-width: 3rem;
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--foreground);
+    font-variant-numeric: tabular-nums;
+}

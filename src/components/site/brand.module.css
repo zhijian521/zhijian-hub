@@ -15,7 +15,7 @@
 
 .name {
     font-size: var(--text-lg);
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     font-family: var(--font-serif);
     color: var(--foreground);
     letter-spacing: 0.05em;

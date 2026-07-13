@@ -8,7 +8,7 @@
   直角边框 + 朱砂红描边，中国风简约。
 ============================================================================*/
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useId } from 'react';
 
 import styles from './dialog.module.css';
 
@@ -29,6 +29,7 @@ interface DialogProps {
 /*== Dialog 通用弹窗 — 遮罩+居中面板，焦点陷阱+Escape关闭 ==*/
 export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps) {
     const panelRef = useRef<HTMLDivElement>(null);
+    const titleId = useId();
 
     /*-- 焦点陷阱：Tab / Shift+Tab 在面板内循环 --*/
     const handleKeyDown = useCallback(
@@ -92,7 +93,7 @@ export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps
         <div className={styles.overlay}>
             <div className={styles.backdrop} onClick={onClose} />
             <div
-                aria-labelledby="dialog-title"
+                aria-labelledby={titleId}
                 aria-modal="true"
                 className={styles.panel}
                 ref={panelRef}
@@ -100,7 +101,7 @@ export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps
                 style={maxWidth ? { maxWidth } : undefined}
             >
                 <div className={styles.header}>
-                    <h3 className={styles.title} id="dialog-title">
+                    <h3 className={styles.title} id={titleId}>
                         {title}
                     </h3>
                 </div>
