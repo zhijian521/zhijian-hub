@@ -1,0 +1,157 @@
+# 04 · API 规范
+
+## 统一响应结构
+
+所有 API Route 返回的 JSON 遵循统一格式：
+
+```ts
+成功: { code: 0, data: T, message: 'success' }
+失败: { code: xxx, data: null, message: 'error description' }
+```
+
+要求：
+- HTTP 状态码保留语义（200, 400, 401, 403, 500等）
+- `body.code` 负责细分业务错误类型
+- 统一使用 helper 函数构造响应
+
+## 业务错误码
+
+业务错误码应按功能模块维护，新增错误码遵循规则：
+
+- 不重复使用已有含义的码值
+- 同类错误放在同一段区间
+- 与 HTTP 状态码语义保持一致
+- 提供清晰的错误描述
+
+示例错误码结构：
+```ts
+enum ApiCode {
+    SUCCESS = 0,
+    BAD_REQUEST = 1000,    // 参数错误
+    UNAUTHORIZED = 1100,    // 未授权
+    FORBIDDEN = 1200,       // 权限不足
+    NOT_FOUND = 1300,       // 资源不存在
+    SERVER_ERROR = 9999     // 服务器内部错误
+}
+```
+
+## 鉴权方式
+
+根据接口安全级别选择合适的鉴权方式：
+
+1. **公开接口**：无鉴权要求
+2. **用户接口**：需要用户登录状态 
+3. **管理员接口**：需要管理员权限
+
+示例实现：
+```ts
+// 公开接口
+export async function GET() {
+    return NextResponse.json(success(publicData));
+}
+
+// 用户接口
+export async function PUT(request: Request) {
+    const user = await requireAuth(request);
+    return NextResponse.json(success(userData));
+}
+
+// 管理员接口
+export async function POST(request: Request) {
+    const admin = await requireAdmin(request);
+    return NextResponse.json(success(adminData));
+}
+```
+
+约束：
+- 认证失败返回 401
+- 权限不足返回 403
+- 避免在 route 中重复实现鉴权逻辑
+
+## Route 注释规范
+
+每个 API route 文件顶部需包含标准注释：
+
+```ts
+/**
+ * @api 用户资料更新
+ * @module users
+ * @auth required
+ * @method PUT 更新用户个人资料
+ * @body {name: string, email: string}
+ * @returns success<User> | fail
+ */
+```
+
+字段说明：
+
+| 字段 | 含义 | 示例值 |
+|------|------|-------|
+| `@api` | 接口中文名称 | 用户资料更新 |
+| `@module` | 功能模块 | users / posts / admin |
+| `@auth` | 认证要求 | required / admin / none |
+| `@method` | HTTP方法和说明 | GET / POST / PUT |
+| `@body` | 请求体结构 | 参数类型和说明 |
+| `@returns` | 返回格式 | success(data) | fail |
+
+## API 文档组织
+
+接口文档按模块组织，便于查找和维护：
+
+1. **功能模块分组**：users、posts、admin、common等
+2. **接口注册**：重要接口建议在项目文档中注册
+3. **版本管理**：API变更需同步更新文档
+
+## 什么时候需要 API 文档
+
+从**第一个** API route 落地开始，建议同时满足：
+
+1. 维护项目 API 文档
+2. 新接口添加文档说明  
+3. route 文件包含标准注释
+4. 重要变更进行版本标记
+
+## 错误处理原则
+
+- **业务校验失败**：返回具体的业务错误码和中文说明
+- **参数验证错误**：返回 400 状态码 + 参数错误信息
+- **认证授权错误**：返回 401/403 + 相应错误说明
+- **未预期异常**：捕获异常，返回 500 + 通用错误信息
+- **安全性**：不把内部错误详情直接返回给客户端
+
+## 入参验证与分页
+
+### 入参验证
+- 参数验证在 route 入口处进行
+- 使用 TypeScript interface 定义参数结构
+- 基础验证：类型、必填、格式等
+- 业务验证：唯一性、权限、状态等
+
+### 分页规范
+
+列表接口统一使用分页结构：
+
+```ts
+interface PaginationResult<T> {
+    data: T[];      // 当前页数据
+    total: number;  // 总条数  
+    page: number;   // 当前页码
+    size: number;   // 每页数量
+}
+```
+
+分页参数：
+```ts
+interface PaginationParams {
+    page?: number;  // 页码，默认1
+    size?: number;  // 每页数量，默认20
+}
+```
+
+## API 安全最佳实践
+
+1. **输入验证**：所有入参都需要验证
+2. **输出过滤**：不返回敏感信息
+3. **权限控制**：细粒度的权限检查
+4. **频率限制**：重要接口加频率限制
+5. **日志记录**：关键操作记录日志

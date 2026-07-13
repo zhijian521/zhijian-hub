@@ -1,0 +1,82 @@
+/*============================================================================
+  theme — 中国风简约亮色主题
+
+  文人书斋 · 水墨宣纸 · 温润雅致
+  朱砂红主色，素净背景，留白呼吸感强
+  只含亮色主题，无暗色模式
+============================================================================*/
+
+:root {
+    /*== 主色 · 朱砂红 ==*/
+    --primary: #9f000f;
+    --primary-foreground: #ffffff;
+    --primary-hover: #c41e3a;
+    --primary-active: #7a000b;
+
+    /*== 副主色 · 竹青 ==*/
+    --secondary: #4a5d23;
+    --secondary-foreground: #ffffff;
+    --secondary-hover: #5a6d2f;
+    --secondary-active: #3a4d19;
+
+    /*== 语义色 · 书斋意象 ==*/
+    --success: #4f7942; /* 竹叶绿 */
+    --success-foreground: #ffffff;
+    --warning: #d48a2a; /* 琥珀黄 */
+    --warning-foreground: #ffffff;
+    --info: #3a6794; /* 靛青 */
+    --info-foreground: #ffffff;
+    --destructive: #ba1a1a; /* 朱砂红变体 */
+    --destructive-foreground: #ffffff;
+
+    /*== 文字色 ==*/
+    --foreground: #1d1b20; /* 墨色 */
+    --muted-foreground: #7a736a; /* 淡墨 */
+    --muted: #f6efe7; /* 宣纸灰 */
+
+    /*== 背景色 ==*/
+    --background: #fbf9f9; /* 素白 */
+    --surface: #ffffff; /* 纯白 */
+    --highlight: #faf7f4; /* 微灰 */
+
+    /*== 边框色 ==*/
+    --border: #e7ddd1; /* 浅米色 */
+    --border-strong: #d4c5b3; /* 深米色 */
+    --input: #d9cbbc; /* 输入框边框 */
+
+    /*== 浮层色 ==*/
+    --card: rgba(255, 255, 255, 0.95); /* 半透明白 */
+    --popover: #ffffff; /* 纯白 */
+    --overlay: rgba(45, 40, 35, 0.4); /* 柔和遮罩 */
+
+    /*== 阴影 · 克制而雅致 ==*/
+    --shadow-sm: 0 1px 2px rgba(45, 40, 35, 0.08);
+    --shadow: 0 4px 16px rgba(45, 40, 35, 0.12);
+    --shadow-lg: 0 12px 48px rgba(45, 40, 35, 0.16);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+
+    /*== 聚焦状态 ==*/
+    --focus-outline: 2px solid color-mix(in srgb, var(--primary) 64%, transparent);
+    --focus-offset: 2px;
+
+    /*== 字体家族 ==*/
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'Georgia', serif;
+    --font-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif;
+    --font-mono: 'SF Mono', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+
+    /*== 选中色 ==*/
+    --selection: color-mix(in srgb, var(--primary) 12%, transparent);
+
+    /*== 渐变遮罩 ==*/
+    --overlay-gradient: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--background) 0%, transparent) 0%,
+        color-mix(in srgb, var(--background) 16%, transparent) 60%,
+        color-mix(in srgb, var(--background) 32%, transparent) 100%
+    );
+
+    /*== 过渡动画 ==*/
+    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: all 0.15s ease;
+    --transition-slow: all 0.3s ease;
+}
