@@ -1,0 +1,52 @@
+/*============================================================================
+  dialog styles — 通用弹窗样式
+
+  遮罩 + 居中面板，直角边框 + 朱砂红描边
+============================================================================*/
+
+/*== 遮罩层 ==*/
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/*== 半透明背景 ==*/
+.backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--overlay);
+}
+
+/*== 面板 ==*/
+.panel {
+    position: relative;
+    z-index: 10;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 24rem;
+    margin: 0 var(--space-4);
+    border: 1px solid var(--primary);
+    background: var(--background);
+    padding: var(--space-5);
+}
+
+/*== 标题栏 ==*/
+.header {
+    margin-bottom: var(--space-4);
+}
+
+.title {
+    font-size: var(--text-base);
+    font-weight: var(--weight-normal);
+    color: var(--foreground);
+    margin: 0;
+}
+
+/*== 内容区 ==*/
+.body {
+    min-width: 0;
+}

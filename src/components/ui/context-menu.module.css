@@ -1,0 +1,61 @@
+/*============================================================================
+  context-menu styles — 右键菜单样式
+
+  固定定位浮层，直角边框，中国风简约
+============================================================================*/
+
+/*== 菜单容器 ==*/
+.menu {
+    position: fixed;
+    z-index: 60;
+    min-width: 8rem;
+    border: 1px solid var(--border);
+    background: var(--popover);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-1) 0;
+    user-select: none;
+}
+
+/*== 菜单项 ==*/
+.item {
+    display: block;
+    width: 100%;
+    padding: var(--space-2) var(--space-4);
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: var(--text-sm);
+    color: var(--foreground);
+    text-align: left;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+/*== 菜单项 hover ==*/
+.item:hover:not(:disabled) {
+    background: var(--muted);
+    color: var(--primary);
+}
+
+/*== 危险菜单项（删除等） ==*/
+.itemDanger {
+    color: var(--destructive);
+}
+
+.itemDanger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--destructive) 8%, transparent);
+    color: var(--destructive);
+}
+
+/*== 禁用状态 ==*/
+.itemDisabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/*== 分隔线 ==*/
+.separator {
+    height: 1px;
+    margin: var(--space-1) 0;
+    background: var(--border);
+}

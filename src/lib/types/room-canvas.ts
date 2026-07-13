@@ -1,7 +1,7 @@
 /*============================================================================
   room-canvas types — 画板类型定义
 
-  房间矩形数据模型 + 交互状态联合类型
+  房间矩形数据模型 + 交互状态联合类型 + 右键菜单状态
 ============================================================================*/
 
 /*== 房间矩形 ==*/
@@ -47,6 +47,18 @@ export type InteractionState =
           /*-- 缩放起始时的房间矩形 --*/
           startRect: { x: number; y: number; width: number; height: number };
       };
+
+/*== 右键菜单状态 ==*/
+export interface ContextMenuState {
+    /*-- 视口 X 坐标 --*/
+    x: number;
+    /*-- 视口 Y 坐标 --*/
+    y: number;
+    /*-- 菜单类型：画板空白处 / 房间上 --*/
+    targetType: 'canvas' | 'room';
+    /*-- 目标房间 ID（仅 targetType === 'room' 时存在） --*/
+    roomId?: string;
+}
 
 /*== 矩形尺寸（用于工具函数） ==*/
 export interface Rect {

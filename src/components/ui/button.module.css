@@ -1,0 +1,63 @@
+/*============================================================================
+  button styles — 通用按钮样式
+
+  直角边框，中国风简约配色
+============================================================================*/
+
+/*== 基础 ==*/
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/*== 尺寸 ==*/
+.small {
+    padding: var(--space-1) var(--space-3);
+}
+
+.medium {
+    padding: var(--space-2) var(--space-4);
+}
+
+/*== 变体：主按钮 ==*/
+.primary {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-foreground);
+}
+
+.primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
+}
+
+/*== 变体：次要按钮 ==*/
+.ghost:hover:not(:disabled) {
+    background: var(--muted);
+}
+
+/*== 变体：危险按钮 ==*/
+.danger {
+    border-color: var(--destructive);
+    background: var(--destructive);
+    color: var(--destructive-foreground);
+}
+
+.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--destructive) 80%, black);
+    border-color: color-mix(in srgb, var(--destructive) 80%, black);
+}

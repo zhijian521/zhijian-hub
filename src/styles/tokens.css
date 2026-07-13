@@ -30,9 +30,12 @@
     --leading-normal: 1.5;
     --leading-relaxed: 1.75;
 
+    /*== 字重 ==*/
+    --weight-normal: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+
     /*== 圆角 ==*/
     --radius: 0; /* 全站零圆角，矩形是品牌语言 */
-    --radius-sm: 0.125rem; /* 2px */
-    --radius-md: 0.5rem; /* 8px */
-    --radius-lg: 0.75rem; /* 12px */
 }

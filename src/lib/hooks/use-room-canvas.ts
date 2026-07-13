@@ -3,15 +3,19 @@
 /*============================================================================
   use-room-canvas — 画板交互逻辑 Hook
 
-  职责：管理房间列表状态、鼠标绘制/移动/缩放交互、键盘快捷键
+  职责：管理房间列表状态、鼠标绘制/移动/缩放交互、键盘快捷键、
+        右键菜单状态、重命名/删除/清空操作
   不负责渲染，只提供数据和事件回调
 ============================================================================*/
 
 /*== 依赖导入 ==*/
 import { useState, useRef, useEffect, useCallback } from 'react';
 
+/*== Hook 导入 ==*/
+import { useKeyPress } from '@/lib/hooks/use-key-press';
+
 /*== 类型导入 ==*/
-import type { Room, ResizeHandle, InteractionState, Rect } from '@/lib/types/room-canvas';
+import type { Room, ResizeHandle, InteractionState, Rect, ContextMenuState } from '@/lib/types/room-canvas';
 
 /*== Hook 配置 ==*/
 interface UseRoomCanvasOptions {
@@ -26,10 +30,20 @@ interface UseRoomCanvasReturn {
     rooms: Room[];
     selectedId: string | null;
     interaction: InteractionState;
+    contextMenu: ContextMenuState | null;
+    renamingId: string | null;
     canvasRef: React.RefObject<HTMLDivElement | null>;
     handleCanvasMouseDown: (e: React.MouseEvent) => void;
     handleRoomMouseDown: (e: React.MouseEvent, room: Room) => void;
     handleHandleMouseDown: (e: React.MouseEvent, handle: ResizeHandle) => void;
+    handleCanvasContextMenu: (e: React.MouseEvent) => void;
+    handleRoomContextMenu: (e: React.MouseEvent, room: Room) => void;
+    closeContextMenu: () => void;
+    deleteRoom: (id: string) => void;
+    clearAll: () => void;
+    startRename: (id: string) => void;
+    confirmRename: (name: string) => void;
+    cancelRename: () => void;
 }
 
 /*== 最小房间尺寸（像素） ==*/
@@ -91,6 +105,8 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     const [rooms, setRooms] = useState<Room[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
+    const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+    const [renamingId, setRenamingId] = useState<string | null>(null);
 
     /*== Refs：避免事件监听器闭包过期 ==*/
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -244,34 +260,93 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         };
     }, [interaction.type, getCoords, snap, generateId]);
 
-    /*== 键盘快捷键：Esc 取消选中 / Delete 删除选中 ==*/
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            const target = e.target as HTMLElement;
-            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
-
-            if (e.key === 'Escape') {
-                setSelectedId(null);
-            } else if (e.key === 'Delete') {
-                const id = selectedIdRef.current;
-                if (id) {
-                    setRooms((prev) => prev.filter((r) => r.id !== id));
-                    setSelectedId(null);
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+    /*== 画板右键菜单：清空画板 ==*/
+    const handleCanvasContextMenu = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            targetType: 'canvas',
+        });
     }, []);
+
+    /*== 房间右键菜单：修改名称 / 删除房间 ==*/
+    const handleRoomContextMenu = useCallback((e: React.MouseEvent, room: Room) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedId(room.id);
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            targetType: 'room',
+            roomId: room.id,
+        });
+    }, []);
+
+    /*== 关闭右键菜单 ==*/
+    const closeContextMenu = useCallback(() => {
+        setContextMenu(null);
+    }, []);
+
+    /*== 删除房间 ==*/
+    const deleteRoom = useCallback((id: string) => {
+        setRooms((prev) => prev.filter((r) => r.id !== id));
+        setSelectedId((prev) => (prev === id ? null : prev));
+    }, []);
+
+    /*== 清空所有房间 ==*/
+    const clearAll = useCallback(() => {
+        setRooms([]);
+        setSelectedId(null);
+    }, []);
+
+    /*== 开始重命名：打开输入弹窗 ==*/
+    const startRename = useCallback((id: string) => {
+        setRenamingId(id);
+    }, []);
+
+    /*== 确认重命名 ==*/
+    const confirmRename = useCallback(
+        (name: string) => {
+            if (!renamingId) return;
+            setRooms((prev) => prev.map((r) => (r.id === renamingId ? { ...r, name } : r)));
+            setRenamingId(null);
+        },
+        [renamingId]
+    );
+
+    /*== 取消重命名 ==*/
+    const cancelRename = useCallback(() => {
+        setRenamingId(null);
+    }, []);
+
+    /*== 键盘快捷键：Escape 取消选中 / Delete+Backspace 删除选中 ==*/
+    useKeyPress('Escape', () => {
+        setSelectedId(null);
+    });
+
+    useKeyPress(['Delete', 'Backspace'], () => {
+        const id = selectedIdRef.current;
+        if (id) deleteRoom(id);
+    });
 
     return {
         rooms,
         selectedId,
         interaction,
+        contextMenu,
+        renamingId,
         canvasRef,
         handleCanvasMouseDown,
         handleRoomMouseDown,
         handleHandleMouseDown,
+        handleCanvasContextMenu,
+        handleRoomContextMenu,
+        closeContextMenu,
+        deleteRoom,
+        clearAll,
+        startRename,
+        confirmRename,
+        cancelRename,
     };
 }
