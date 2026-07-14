@@ -36,6 +36,8 @@
     --weight-semibold: 600;
     --weight-bold: 700;
 
-    /*== 圆角 ==*/
-    --radius: 0; /* 全站零圆角，矩形是品牌语言 */
+    /*== 圆角刻度 ==*/
+    --radius-sm: 0.25rem; /* 4px：空间对象 */
+    --radius: 0.375rem; /* 6px：交互控件 */
+    --radius-lg: 0.625rem; /* 10px：浮层容器 */
 }

@@ -1,7 +1,7 @@
 /*============================================================================
   context-menu styles — 右键菜单样式
 
-  固定定位浮层，直角边框，中国风简约
+  固定定位浮层，温润小圆角，中国风简约
 ============================================================================*/
 
 /*== 菜单容器 ==*/
@@ -10,9 +10,11 @@
     z-index: 60;
     min-width: 8rem;
     border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     background: var(--popover);
     box-shadow: var(--shadow-lg);
     padding: var(--space-1) 0;
+    overflow: hidden;
     user-select: none;
 }
 
@@ -22,6 +24,7 @@
     width: 100%;
     padding: var(--space-2) var(--space-4);
     border: none;
+    border-radius: var(--radius-sm);
     background: none;
     font-family: inherit;
     font-size: var(--text-sm);

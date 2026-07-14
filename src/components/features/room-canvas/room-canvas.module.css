@@ -2,7 +2,7 @@
   room-canvas styles — 画板组件样式
 
   使用主题变量（theme.css）和设计令牌（tokens.css）
-  零圆角矩形语言，中国风简约配色
+  克制小圆角语言，中国风简约配色
 ============================================================================*/
 
 /*== 画板区域 ==*/
@@ -68,6 +68,7 @@
     appearance: none;
     padding: 0;
     border: 2px solid color-mix(in srgb, var(--primary) 50%, transparent);
+    border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--primary) 5%, transparent);
     font: inherit;
     cursor: move;
@@ -104,6 +105,7 @@
     position: absolute;
     box-sizing: border-box;
     border: 2px dashed var(--primary);
+    border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--primary) 8%, transparent);
     pointer-events: none;
     z-index: 3;
@@ -116,6 +118,7 @@
     height: 10px;
     background: var(--primary);
     border: 1px solid var(--surface);
+    border-radius: 2px;
     z-index: 4;
 }
 
