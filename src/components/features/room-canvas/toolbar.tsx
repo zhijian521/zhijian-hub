@@ -68,7 +68,7 @@ export function Toolbar({ tool, onToolChange, onAddRoom, canClear, onClear }: To
                 <PlusIcon />
             </button>
             <button
-                className={styles.button}
+                className={cn(styles.button, styles.dangerButton)}
                 type="button"
                 aria-label="清空画板"
                 title="清空画板"
