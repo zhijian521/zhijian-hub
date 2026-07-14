@@ -43,6 +43,8 @@ const HANDLES: ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
     const {
         rooms,
+        canUndo,
+        canRedo,
         selectedId,
         interaction,
         contextMenu,
@@ -68,6 +70,8 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
         zoomIn,
         zoomOut,
         addRoom,
+        undo,
+        redo,
         setTool,
     } = useRoomCanvas({ gridSize });
     const roomInstructionsId = useId();
@@ -142,7 +146,7 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                 >
                     <p className={styles.srOnly} id={roomInstructionsId}>
                         方向键移动房间，Shift 加方向键调整大小，Enter 或 F2 重命名，Delete 删除，Shift 加 F10
-                        打开操作菜单。
+                        打开操作菜单。Ctrl 或 Command 加 Z 撤销，Ctrl 加 Y 或 Ctrl、Command 加 Shift Z 重做。
                     </p>
 
                     {/*== 空状态提示 ==*/}
@@ -207,8 +211,12 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                 <Toolbar
                     tool={tool}
                     canClear={rooms.length > 0}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
                     onAddRoom={addRoom}
                     onClear={clearAll}
+                    onUndo={undo}
+                    onRedo={redo}
                     onToolChange={setTool}
                 />
 

@@ -87,6 +87,50 @@ describe('accessible overlays', () => {
 });
 
 describe('room canvas keyboard interaction', () => {
+    it('undoes and redoes room creation from the toolbar', () => {
+        render(<RoomCanvas />);
+        const addRoom = screen.getByRole('button', { name: '添加房间' });
+        const undo = screen.getByRole<HTMLButtonElement>('button', { name: '撤销' });
+        const redo = screen.getByRole<HTMLButtonElement>('button', { name: '重做' });
+
+        expect(undo.disabled).toBe(true);
+        expect(redo.disabled).toBe(true);
+
+        fireEvent.click(addRoom);
+        expect(screen.getByRole('button', { name: '房间 1' })).toBeInstanceOf(HTMLButtonElement);
+        expect(undo.disabled).toBe(false);
+
+        fireEvent.click(undo);
+        expect(screen.queryByRole('button', { name: '房间 1' })).toBeNull();
+        expect(undo.disabled).toBe(true);
+        expect(redo.disabled).toBe(false);
+
+        fireEvent.click(redo);
+        expect(screen.getByRole('button', { name: '房间 1' })).toBeInstanceOf(HTMLButtonElement);
+        expect(undo.disabled).toBe(false);
+        expect(redo.disabled).toBe(true);
+    });
+
+    it('undoes and redoes keyboard room movement with shortcuts', () => {
+        render(<RoomCanvas gridSize={20} />);
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+
+        const room = screen.getByRole('button', { name: '房间 1' });
+        const startLeft = Number.parseFloat(room.style.left);
+        fireEvent.keyDown(room, { key: 'ArrowRight' });
+        expect(Number.parseFloat(room.style.left)).toBe(startLeft + 20);
+
+        fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+        expect(Number.parseFloat(room.style.left)).toBe(startLeft);
+
+        fireEvent.keyDown(window, { key: 'Z', ctrlKey: true, shiftKey: true });
+        expect(Number.parseFloat(room.style.left)).toBe(startLeft + 20);
+
+        fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+        fireEvent.keyDown(window, { key: 'y', ctrlKey: true });
+        expect(Number.parseFloat(room.style.left)).toBe(startLeft + 20);
+    });
+
     it('does not start canvas interaction from toolbar pointer events', () => {
         render(<RoomCanvas />);
         const selectTool = screen.getByRole('button', { name: '选取' });

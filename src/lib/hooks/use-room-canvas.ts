@@ -31,6 +31,8 @@ interface UseRoomCanvasOptions {
 /*== Hook 返回值 ==*/
 interface UseRoomCanvasReturn {
     rooms: Room[];
+    canUndo: boolean;
+    canRedo: boolean;
     selectedId: string | null;
     interaction: InteractionState;
     contextMenu: ContextMenuState | null;
@@ -56,7 +58,14 @@ interface UseRoomCanvasReturn {
     zoomIn: () => void;
     zoomOut: () => void;
     addRoom: () => void;
+    undo: () => void;
+    redo: () => void;
     setTool: (tool: Tool) => void;
+}
+
+interface RoomHistory {
+    past: Room[][];
+    future: Room[][];
 }
 
 /*== 缩放范围与步进 ==*/
@@ -67,6 +76,7 @@ const ZOOM_STEP = 0.1;
 /*== 键盘与快捷创建尺寸 ==*/
 const DEFAULT_ROOM_WIDTH_IN_GRIDS = 6;
 const DEFAULT_ROOM_HEIGHT_IN_GRIDS = 4;
+const HISTORY_LIMIT = 50;
 
 /*== 缩放钳制函数 ==*/
 function clampZoom(z: number): number {
@@ -88,6 +98,21 @@ function getKeyboardDelta(key: string, step: number): { x: number; y: number } {
     }
 }
 
+function areRoomsEqual(left: Room[], right: Room[]): boolean {
+    if (left.length !== right.length) return false;
+    return left.every((room, index) => {
+        const other = right[index];
+        return (
+            room.id === other.id &&
+            room.name === other.name &&
+            room.x === other.x &&
+            room.y === other.y &&
+            room.width === other.width &&
+            room.height === other.height
+        );
+    });
+}
+
 /*============================================================================
   useRoomCanvas — 画板交互 Hook
 ============================================================================*/
@@ -96,6 +121,8 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
 
     /*== 状态 ==*/
     const [rooms, setRooms] = useState<Room[]>([]);
+    const [canUndo, setCanUndo] = useState(false);
+    const [canRedo, setCanRedo] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -113,6 +140,8 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     const panOffsetRef = useRef(panOffset);
     const zoomRef = useRef(zoom);
     const roomCounter = useRef(0);
+    const historyRef = useRef<RoomHistory>({ past: [], future: [] });
+    const interactionStartRoomsRef = useRef<Room[] | null>(null);
 
     useEffect(() => {
         interactionRef.current = interaction;
@@ -161,17 +190,94 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         setInteraction(nextInteraction);
     }, []);
 
-    /*== 创建房间：序号只递增一次 ==*/
-    const appendRoom = useCallback((rect: Rect) => {
-        const room = createRoom(++roomCounter.current, rect);
-        setRooms((currentRooms) => {
-            const nextRooms = [...currentRooms, room];
-            roomsRef.current = nextRooms;
-            return nextRooms;
-        });
-        selectedIdRef.current = room.id;
-        setSelectedId(room.id);
+    /*== 房间历史：只在完整操作结束时记录快照 ==*/
+    const updateHistoryAvailability = useCallback(() => {
+        setCanUndo(historyRef.current.past.length > 0);
+        setCanRedo(historyRef.current.future.length > 0);
     }, []);
+
+    const replaceRooms = useCallback((nextRooms: Room[]) => {
+        roomsRef.current = nextRooms;
+        setRooms(nextRooms);
+    }, []);
+
+    const recordHistory = useCallback(
+        (previousRooms: Room[], nextRooms: Room[]) => {
+            if (areRoomsEqual(previousRooms, nextRooms)) return false;
+
+            const history = historyRef.current;
+            history.past.push(previousRooms);
+            if (history.past.length > HISTORY_LIMIT) history.past.shift();
+            history.future = [];
+            updateHistoryAvailability();
+            return true;
+        },
+        [updateHistoryAvailability]
+    );
+
+    const commitRooms = useCallback(
+        (nextRooms: Room[]) => {
+            const currentRooms = roomsRef.current;
+            if (!recordHistory(currentRooms, nextRooms)) return false;
+            replaceRooms(nextRooms);
+            return true;
+        },
+        [recordHistory, replaceRooms]
+    );
+
+    const restoreRooms = useCallback(
+        (nextRooms: Room[]) => {
+            replaceRooms(nextRooms);
+            const selectedId = selectedIdRef.current;
+            if (selectedId && !nextRooms.some((room) => room.id === selectedId)) {
+                selectedIdRef.current = null;
+                setSelectedId(null);
+            }
+            setContextMenu(null);
+            setRenamingId(null);
+        },
+        [replaceRooms]
+    );
+
+    const undo = useCallback(() => {
+        if (interactionRef.current.type !== 'idle') return;
+        const history = historyRef.current;
+        const previousRooms = history.past.pop();
+        if (!previousRooms) return;
+
+        history.future.push(roomsRef.current);
+        restoreRooms(previousRooms);
+        updateHistoryAvailability();
+    }, [restoreRooms, updateHistoryAvailability]);
+
+    const redo = useCallback(() => {
+        if (interactionRef.current.type !== 'idle') return;
+        const history = historyRef.current;
+        const nextRooms = history.future.pop();
+        if (!nextRooms) return;
+
+        history.past.push(roomsRef.current);
+        if (history.past.length > HISTORY_LIMIT) history.past.shift();
+        restoreRooms(nextRooms);
+        updateHistoryAvailability();
+    }, [restoreRooms, updateHistoryAvailability]);
+
+    const recordInteractionHistory = useCallback(() => {
+        const startRooms = interactionStartRoomsRef.current;
+        interactionStartRoomsRef.current = null;
+        if (startRooms) recordHistory(startRooms, roomsRef.current);
+    }, [recordHistory]);
+
+    /*== 创建房间：序号只递增一次 ==*/
+    const appendRoom = useCallback(
+        (rect: Rect) => {
+            const room = createRoom(++roomCounter.current, rect);
+            commitRooms([...roomsRef.current, room]);
+            selectedIdRef.current = room.id;
+            setSelectedId(room.id);
+        },
+        [commitRooms]
+    );
 
     const selectRoom = useCallback((id: string) => {
         selectedIdRef.current = id;
@@ -183,6 +289,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         (e: React.PointerEvent) => {
             if (e.button !== 0) return;
             e.preventDefault();
+            interactionStartRoomsRef.current = null;
 
             /*-- 选取工具：开始拖拽画布 --*/
             if (toolRef.current === 'select') {
@@ -224,6 +331,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
             if (e.button !== 0) return;
             e.stopPropagation();
             selectRoom(room.id);
+            interactionStartRoomsRef.current = roomsRef.current;
             const { x, y } = getCoords(e);
             const sx = snap(x);
             const sy = snap(y);
@@ -246,6 +354,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
             e.stopPropagation();
             const room = roomsRef.current.find((currentRoom) => currentRoom.id === selectedIdRef.current);
             if (!room) return;
+            interactionStartRoomsRef.current = roomsRef.current;
             updateInteraction({
                 type: 'resizing',
                 pointerId: e.pointerId,
@@ -285,19 +394,16 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
                 return;
             }
 
-            setRooms((currentRooms) => {
-                const nextRooms = currentRooms.map((room) => {
-                    if (room.id !== current.id) return room;
-                    if (current.type === 'moving') {
-                        return { ...room, x: pointerX - current.offsetX, y: pointerY - current.offsetY };
-                    }
-                    return { ...room, ...computeResizedRect(current.handle, current.startRect, pointerX, pointerY) };
-                });
-                roomsRef.current = nextRooms;
-                return nextRooms;
+            const nextRooms = roomsRef.current.map((room) => {
+                if (room.id !== current.id) return room;
+                if (current.type === 'moving') {
+                    return { ...room, x: pointerX - current.offsetX, y: pointerY - current.offsetY };
+                }
+                return { ...room, ...computeResizedRect(current.handle, current.startRect, pointerX, pointerY) };
             });
+            if (!areRoomsEqual(roomsRef.current, nextRooms)) replaceRooms(nextRooms);
         },
-        [getCoords, snap, updateInteraction]
+        [getCoords, replaceRooms, snap, updateInteraction]
     );
 
     /*== 全局指针移动/抬起（交互期间挂载） ==*/
@@ -341,6 +447,8 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
                         height,
                     });
                 }
+            } else if (completed.type === 'moving' || completed.type === 'resizing') {
+                recordInteractionHistory();
             }
 
             updateInteraction({ type: 'idle' });
@@ -349,6 +457,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         const handlePointerCancel = (e: PointerEvent) => {
             const current = interactionRef.current;
             if (current.type === 'idle' || current.pointerId !== e.pointerId) return;
+            if (current.type === 'moving' || current.type === 'resizing') recordInteractionHistory();
             updateInteraction({ type: 'idle' });
         };
 
@@ -361,7 +470,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
             window.removeEventListener('pointerup', handlePointerUp);
             window.removeEventListener('pointercancel', handlePointerCancel);
         };
-    }, [appendRoom, applyPointerMove, interaction.type, updateInteraction]);
+    }, [appendRoom, applyPointerMove, interaction.type, recordInteractionHistory, updateInteraction]);
 
     /*== 画板右键菜单：清空画板 ==*/
     const handleCanvasContextMenu = useCallback((e: React.MouseEvent) => {
@@ -393,25 +502,24 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     }, []);
 
     /*== 删除房间 ==*/
-    const deleteRoom = useCallback((id: string) => {
-        setRooms((currentRooms) => {
-            const nextRooms = currentRooms.filter((room) => room.id !== id);
-            roomsRef.current = nextRooms;
-            return nextRooms;
-        });
-        if (selectedIdRef.current === id) {
-            selectedIdRef.current = null;
-            setSelectedId(null);
-        }
-    }, []);
+    const deleteRoom = useCallback(
+        (id: string) => {
+            const nextRooms = roomsRef.current.filter((room) => room.id !== id);
+            if (!commitRooms(nextRooms)) return;
+            if (selectedIdRef.current === id) {
+                selectedIdRef.current = null;
+                setSelectedId(null);
+            }
+        },
+        [commitRooms]
+    );
 
     /*== 清空所有房间 ==*/
     const clearAll = useCallback(() => {
-        roomsRef.current = [];
+        if (!commitRooms([])) return;
         selectedIdRef.current = null;
-        setRooms([]);
         setSelectedId(null);
-    }, []);
+    }, [commitRooms]);
 
     /*== 开始重命名：打开输入弹窗 ==*/
     const startRename = useCallback((id: string) => {
@@ -422,14 +530,11 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     const confirmRename = useCallback(
         (name: string) => {
             if (!renamingId) return;
-            setRooms((currentRooms) => {
-                const nextRooms = currentRooms.map((room) => (room.id === renamingId ? { ...room, name } : room));
-                roomsRef.current = nextRooms;
-                return nextRooms;
-            });
+            const nextRooms = roomsRef.current.map((room) => (room.id === renamingId ? { ...room, name } : room));
+            commitRooms(nextRooms);
             setRenamingId(null);
         },
-        [renamingId]
+        [commitRooms, renamingId]
     );
 
     /*== 取消重命名 ==*/
@@ -483,29 +588,26 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
             e.preventDefault();
             selectRoom(room.id);
             const delta = getKeyboardDelta(e.key, gridSize);
-            setRooms((currentRooms) => {
-                const nextRooms = currentRooms.map((currentRoom) => {
-                    if (currentRoom.id !== room.id) return currentRoom;
+            const nextRooms = roomsRef.current.map((currentRoom) => {
+                if (currentRoom.id !== room.id) return currentRoom;
 
-                    if (e.shiftKey) {
-                        return {
-                            ...currentRoom,
-                            width: Math.max(MIN_ROOM_SIZE, currentRoom.width + delta.x),
-                            height: Math.max(MIN_ROOM_SIZE, currentRoom.height + delta.y),
-                        };
-                    }
-
+                if (e.shiftKey) {
                     return {
                         ...currentRoom,
-                        x: currentRoom.x + delta.x,
-                        y: currentRoom.y + delta.y,
+                        width: Math.max(MIN_ROOM_SIZE, currentRoom.width + delta.x),
+                        height: Math.max(MIN_ROOM_SIZE, currentRoom.height + delta.y),
                     };
-                });
-                roomsRef.current = nextRooms;
-                return nextRooms;
+                }
+
+                return {
+                    ...currentRoom,
+                    x: currentRoom.x + delta.x,
+                    y: currentRoom.y + delta.y,
+                };
             });
+            commitRooms(nextRooms);
         },
-        [deleteRoom, gridSize, selectRoom, startRename]
+        [commitRooms, deleteRoom, gridSize, selectRoom, startRename]
     );
 
     /*== 键盘快捷键：Escape 取消选中 / Delete+Backspace 删除选中 ==*/
@@ -518,6 +620,35 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         const id = selectedIdRef.current;
         if (id) deleteRoom(id);
     });
+
+    useKeyPress(
+        ['z', 'Z'],
+        (e) => {
+            e.preventDefault();
+            if (e.shiftKey) redo();
+            else undo();
+        },
+        { ctrlKey: true }
+    );
+
+    useKeyPress(
+        ['z', 'Z'],
+        (e) => {
+            e.preventDefault();
+            if (e.shiftKey) redo();
+            else undo();
+        },
+        { metaKey: true }
+    );
+
+    useKeyPress(
+        ['y', 'Y'],
+        (e) => {
+            e.preventDefault();
+            redo();
+        },
+        { ctrlKey: true }
+    );
 
     /*== 以画布视口中心为锚点缩放，保持中心内容不偏移 ==*/
     const setZoomAtCanvasCenter = useCallback((nextZoom: number) => {
@@ -561,6 +692,8 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
 
     return {
         rooms,
+        canUndo,
+        canRedo,
         selectedId,
         interaction,
         contextMenu,
@@ -586,6 +719,8 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         zoomIn,
         zoomOut,
         addRoom,
+        undo,
+        redo,
         setTool,
     };
 }
