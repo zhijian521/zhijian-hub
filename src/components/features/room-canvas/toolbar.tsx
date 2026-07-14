@@ -5,7 +5,7 @@
   当前工具：选取（小手，拖拽画布）/ 创建房间（矩形）
 ============================================================================*/
 
-import { HandIcon, RoomIcon } from '@/components/ui/icons';
+import { HandIcon, PlusIcon, RoomIcon, TrashIcon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils/cn';
 import type { Tool } from '@/lib/types/room-canvas';
 
@@ -23,12 +23,33 @@ interface ToolbarProps {
     tool: Tool;
     /*-- 切换工具 --*/
     onToolChange: (tool: Tool) => void;
+    /*-- 在视口中心添加默认房间 --*/
+    onAddRoom: () => void;
+    /*-- 是否允许清空画板 --*/
+    canClear: boolean;
+    /*-- 清空画板 --*/
+    onClear: () => void;
 }
 
 /*== Toolbar 工具栏 — 顶部居中浮层 ==*/
-export function Toolbar({ tool, onToolChange }: ToolbarProps) {
+export function Toolbar({ tool, onToolChange, onAddRoom, canClear, onClear }: ToolbarProps) {
+    const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        e.stopPropagation();
+    };
+
+    const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
     return (
-        <div className={styles.container}>
+        <div
+            className={styles.container}
+            role="toolbar"
+            aria-label="画板工具"
+            onContextMenu={handleContextMenu}
+            onPointerDown={handlePointerDown}
+        >
             {TOOLS.map((item) => (
                 <button
                     key={item.id}
@@ -42,6 +63,20 @@ export function Toolbar({ tool, onToolChange }: ToolbarProps) {
                     {item.icon}
                 </button>
             ))}
+            <span className={styles.separator} aria-hidden="true" />
+            <button className={styles.button} type="button" aria-label="添加房间" title="添加房间" onClick={onAddRoom}>
+                <PlusIcon />
+            </button>
+            <button
+                className={styles.button}
+                type="button"
+                aria-label="清空画板"
+                title="清空画板"
+                disabled={!canClear}
+                onClick={onClear}
+            >
+                <TrashIcon />
+            </button>
         </div>
     );
 }

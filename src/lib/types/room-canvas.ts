@@ -31,6 +31,7 @@ export type InteractionState =
     | { type: 'idle' }
     | {
           type: 'drawing';
+          pointerId: number;
           startX: number;
           startY: number;
           currentX: number;
@@ -38,6 +39,7 @@ export type InteractionState =
       }
     | {
           type: 'moving';
+          pointerId: number;
           id: string;
           /*-- 鼠标相对房间左上角的偏移 --*/
           offsetX: number;
@@ -45,6 +47,7 @@ export type InteractionState =
       }
     | {
           type: 'resizing';
+          pointerId: number;
           id: string;
           handle: ResizeHandle;
           /*-- 缩放起始时的房间矩形 --*/
@@ -52,6 +55,7 @@ export type InteractionState =
       }
     | {
           type: 'panning';
+          pointerId: number;
           /*-- 鼠标按下时的视口坐标 --*/
           startMouseX: number;
           startMouseY: number;

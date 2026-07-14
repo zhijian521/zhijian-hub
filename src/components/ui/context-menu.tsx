@@ -7,9 +7,8 @@
   菜单项支持 danger 样式（删除等危险操作）和分隔线。
 ============================================================================*/
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { useKeyPress } from '@/lib/hooks/use-key-press';
 import { cn } from '@/lib/utils/cn';
 
 import styles from './context-menu.module.css';
@@ -44,6 +43,8 @@ interface ContextMenuProps {
     x: number;
     /*-- 菜单 Y 坐标（视口坐标） --*/
     y: number;
+    /*-- 菜单无障碍名称 --*/
+    ariaLabel: string;
     /*-- 菜单条目 --*/
     items: ContextMenuEntry[];
     /*-- 关闭回调 --*/
@@ -51,11 +52,32 @@ interface ContextMenuProps {
 }
 
 /*== ContextMenu 右键菜单 — 固定定位浮层 ==*/
-export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
-    const menuRef = useRef<HTMLDivElement>(null);
+const VIEWPORT_PADDING = 8;
 
-    /*-- Escape 关闭（复用 useKeyPress） --*/
-    useKeyPress('Escape', onClose, { ignoreInputs: false });
+export function ContextMenu({ x, y, ariaLabel, items, onClose }: ContextMenuProps) {
+    const menuRef = useRef<HTMLDivElement>(null);
+    const returnFocusRef = useRef<HTMLElement | null>(null);
+    const [position, setPosition] = useState({ left: x, top: y });
+
+    /*-- 打开后钳制到视口内并聚焦首个可用菜单项 --*/
+    useLayoutEffect(() => {
+        const menu = menuRef.current;
+        if (!menu) return;
+        if (!returnFocusRef.current && document.activeElement instanceof HTMLElement) {
+            returnFocusRef.current = document.activeElement;
+        }
+        const rect = menu.getBoundingClientRect();
+        setPosition({
+            left: Math.max(VIEWPORT_PADDING, Math.min(x, window.innerWidth - rect.width - VIEWPORT_PADDING)),
+            top: Math.max(VIEWPORT_PADDING, Math.min(y, window.innerHeight - rect.height - VIEWPORT_PADDING)),
+        });
+        menu.querySelector<HTMLButtonElement>('[role="menuitem"]:not([disabled])')?.focus();
+    }, [x, y]);
+
+    /*-- 关闭菜单后恢复原焦点 --*/
+    useEffect(() => {
+        return () => returnFocusRef.current?.focus();
+    }, []);
 
     /*-- 点击外部关闭 --*/
     useEffect(() => {
@@ -76,11 +98,47 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
         };
     }, [onClose]);
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            onClose();
+            return;
+        }
+
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+        e.preventDefault();
+        const menuItems = Array.from(
+            e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])')
+        );
+        if (menuItems.length === 0) return;
+
+        const currentIndex = menuItems.indexOf(document.activeElement as HTMLButtonElement);
+        if (e.key === 'Home') {
+            menuItems[0].focus();
+            return;
+        }
+        if (e.key === 'End') {
+            menuItems[menuItems.length - 1].focus();
+            return;
+        }
+
+        const direction = e.key === 'ArrowDown' ? 1 : -1;
+        const nextIndex = (currentIndex + direction + menuItems.length) % menuItems.length;
+        menuItems[nextIndex].focus();
+    };
+
     return (
-        <div ref={menuRef} className={styles.menu} style={{ left: x, top: y }}>
+        <div
+            ref={menuRef}
+            className={styles.menu}
+            role="menu"
+            aria-label={ariaLabel}
+            style={position}
+            onKeyDown={handleKeyDown}
+        >
             {items.map((entry, index) => {
                 if (isSeparator(entry)) {
-                    return <div key={`sep-${index}`} className={styles.separator} />;
+                    return <div key={`sep-${index}`} className={styles.separator} role="separator" />;
                 }
 
                 return (
@@ -92,6 +150,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
                             entry.disabled && styles.itemDisabled
                         )}
                         disabled={entry.disabled}
+                        role="menuitem"
                         onClick={() => {
                             entry.onClick();
                             onClose();

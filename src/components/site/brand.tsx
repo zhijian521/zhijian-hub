@@ -13,7 +13,7 @@ import styles from './brand.module.css';
 export function Brand() {
     return (
         <div className={styles.brand}>
-            <Image src="/logo.webp" alt="知简" width={28} height={28} />
+            <Image src="/logo.webp" alt="" width={28} height={28} />
             <span className={styles.name}>知简</span>
         </div>
     );

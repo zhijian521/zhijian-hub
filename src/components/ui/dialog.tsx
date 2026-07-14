@@ -59,39 +59,38 @@ export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps
         [onClose]
     );
 
-    /*-- 打开时禁止 body 滚动 + 绑定键盘事件 --*/
+    /*-- 打开时锁定滚动、聚焦弹窗，关闭后恢复触发元素焦点 --*/
     useEffect(() => {
         if (!open) return;
 
+        const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const prevOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', handleKeyDown);
+        const animationFrame = requestAnimationFrame(() => {
+            const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+                'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable?.[0]) {
+                focusable[0].focus();
+                return;
+            }
+            panelRef.current?.focus();
+        });
 
         return () => {
+            cancelAnimationFrame(animationFrame);
             document.body.style.overflow = prevOverflow;
             document.removeEventListener('keydown', handleKeyDown);
+            returnFocus?.focus();
         };
     }, [open, handleKeyDown]);
-
-    /*-- 打开瞬间自动聚焦第一个可聚焦元素 --*/
-    const prevOpenRef = useRef(false);
-    useEffect(() => {
-        if (open && !prevOpenRef.current) {
-            requestAnimationFrame(() => {
-                const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
-                    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-                );
-                focusable?.[0]?.focus();
-            });
-        }
-        prevOpenRef.current = open;
-    }, [open]);
 
     if (!open) return null;
 
     return (
         <div className={styles.overlay}>
-            <div className={styles.backdrop} onClick={onClose} />
+            <div className={styles.backdrop} aria-hidden="true" onClick={onClose} />
             <div
                 aria-labelledby={titleId}
                 aria-modal="true"
@@ -99,11 +98,12 @@ export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps
                 ref={panelRef}
                 role="dialog"
                 style={maxWidth ? { maxWidth } : undefined}
+                tabIndex={-1}
             >
                 <div className={styles.header}>
-                    <h3 className={styles.title} id={titleId}>
+                    <h2 className={styles.title} id={titleId}>
                         {title}
-                    </h3>
+                    </h2>
                 </div>
                 <div className={styles.body}>{children}</div>
             </div>

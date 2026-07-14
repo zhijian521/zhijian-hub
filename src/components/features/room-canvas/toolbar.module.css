@@ -31,7 +31,10 @@
     background: transparent;
     color: var(--muted-foreground);
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition:
+        color var(--transition-fast),
+        background-color var(--transition-fast),
+        border-color var(--transition-fast);
 }
 
 .button > svg {
@@ -40,9 +43,14 @@
     height: 1.125rem;
 }
 
-.button:hover {
+.button:hover:not(:disabled) {
     color: var(--primary);
     border-color: var(--border);
+}
+
+.button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 /*-- 激活状态：朱砂红填充 --*/
@@ -60,4 +68,18 @@
 .button:focus-visible {
     outline: var(--focus-outline);
     outline-offset: var(--focus-offset);
+}
+
+.separator {
+    width: 1px;
+    height: var(--space-5);
+    margin: 0 var(--space-1);
+    background: var(--border);
+}
+
+@media (pointer: coarse) {
+    .button {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
 }

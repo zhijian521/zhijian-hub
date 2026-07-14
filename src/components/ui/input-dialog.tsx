@@ -7,7 +7,7 @@
   Escape 关闭、Enter 确认、打开时自动聚焦并全选文本。
 ============================================================================*/
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -21,6 +21,8 @@ interface InputDialogProps {
     title: string;
     /*-- 输入框占位提示 --*/
     placeholder?: string;
+    /*-- 输入框标签，默认与弹窗标题一致 --*/
+    label?: string;
     /*-- 初始值 --*/
     initialValue?: string;
     /*-- 确认回调，返回字符串 --*/
@@ -30,19 +32,25 @@ interface InputDialogProps {
 }
 
 /*== InputDialog 输入弹窗 — 基于 Dialog+Button ==*/
-export function InputDialog({ open, title, placeholder, initialValue = '', onConfirm, onClose }: InputDialogProps) {
+export function InputDialog({
+    open,
+    title,
+    placeholder,
+    label = title,
+    initialValue = '',
+    onConfirm,
+    onClose,
+}: InputDialogProps) {
     const [value, setValue] = useState(initialValue);
     const inputRef = useRef<HTMLInputElement>(null);
+    const inputId = useId();
 
     /*-- 打开时重置为初始值并自动聚焦 --*/
     useEffect(() => {
-        if (open) {
-            setValue(initialValue);
-            requestAnimationFrame(() => {
-                inputRef.current?.focus();
-                inputRef.current?.select();
-            });
-        }
+        if (!open) return;
+        setValue(initialValue);
+        const animationFrame = requestAnimationFrame(() => inputRef.current?.select());
+        return () => cancelAnimationFrame(animationFrame);
     }, [open, initialValue]);
 
     /*-- 确认：不允许空值 --*/
@@ -65,9 +73,14 @@ export function InputDialog({ open, title, placeholder, initialValue = '', onCon
 
     return (
         <Dialog open={open} title={title} onClose={onClose}>
+            <label className={styles.label} htmlFor={inputId}>
+                {label}
+            </label>
             <input
+                id={inputId}
                 ref={inputRef}
                 className={styles.input}
+                autoComplete="off"
                 placeholder={placeholder}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}

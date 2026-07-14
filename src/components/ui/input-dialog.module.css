@@ -5,6 +5,13 @@
 ============================================================================*/
 
 /*== 输入框 ==*/
+.label {
+    display: block;
+    margin-bottom: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+}
+
 .input {
     box-sizing: border-box;
     width: 100%;
@@ -23,7 +30,7 @@
 
 .input::placeholder {
     color: var(--muted-foreground);
-    opacity: 0.6;
+    opacity: 1;
 }
 
 .input:focus-visible {

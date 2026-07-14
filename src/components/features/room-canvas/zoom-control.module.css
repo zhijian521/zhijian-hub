@@ -26,3 +26,10 @@
     color: var(--foreground);
     font-variant-numeric: tabular-nums;
 }
+
+@media (pointer: coarse) {
+    .container button {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
+}

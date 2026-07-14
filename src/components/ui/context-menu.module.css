@@ -28,13 +28,20 @@
     color: var(--foreground);
     text-align: left;
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition:
+        color var(--transition-fast),
+        background-color var(--transition-fast);
 }
 
 /*== 菜单项 hover ==*/
 .item:hover:not(:disabled) {
     background: var(--muted);
     color: var(--primary);
+}
+
+.item:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: calc(-1 * var(--focus-offset));
 }
 
 /*== 危险菜单项（删除等） ==*/

@@ -14,7 +14,10 @@
     background: var(--surface);
     color: var(--foreground);
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition:
+        color var(--transition-fast),
+        background-color var(--transition-fast),
+        border-color var(--transition-fast);
 }
 
 .button > svg {

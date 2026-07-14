@@ -31,7 +31,7 @@
 
     /*== 文字色 ==*/
     --foreground: #1d1b20; /* 墨色 */
-    --muted-foreground: #7a736a; /* 淡墨 */
+    --muted-foreground: #756e65; /* 淡墨，满足普通文本 AA 对比度 */
     --muted: #f6efe7; /* 宣纸灰 */
 
     /*== 背景色 ==*/
@@ -76,7 +76,7 @@
     );
 
     /*== 过渡动画 ==*/
-    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-fast: all 0.15s ease;
-    --transition-slow: all 0.3s ease;
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: 0.15s ease;
+    --transition-slow: 0.3s ease;
 }

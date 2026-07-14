@@ -43,6 +43,7 @@ export const STROKE_ICONS: Record<string, React.ReactNode> = {
             strokeLinejoin="round"
         />
     ),
+    trash: <path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6" strokeLinecap="round" strokeLinejoin="round" />,
 };
 
 /*============================================================================
@@ -86,3 +87,4 @@ export const MinusIcon = makeIcon('minus');
 export const PlusIcon = makeIcon('plus');
 export const HandIcon = makeIcon('hand');
 export const RoomIcon = makeIcon('room');
+export const TrashIcon = makeIcon('trash');

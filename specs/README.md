@@ -45,6 +45,7 @@
 
 - `npm run lint`：代码质量检查
 - `npm run typecheck`：TypeScript 类型检查
+- `npm run test`：Vitest 自动化测试
 
 格式化由 `npm run format` / `npm run format:check` 辅助，但提交门禁以 `check` 为准。
 

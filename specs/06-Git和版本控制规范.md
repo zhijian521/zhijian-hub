@@ -15,9 +15,9 @@
 
 ### 主要分支
 
-- **main**：主分支，用于生产环境部署
+- **master**：当前主分支，用于生产环境部署
 - **develop**：开发分支，用于集成各功能（可选）
-- **feat/xxx**：功能分支，从 develop/main 检出
+- **feat/xxx**：功能分支，从 develop/master 检出
 
 ## Commit 规范
 
@@ -205,8 +205,8 @@ git commit -m "feat: implement new feature"
 git push origin feat/new-feature
 
 # 更新主分支
-git checkout main
-git pull origin main
+git checkout master
+git pull origin master
 
 # 合并功能分支
 git merge feat/new-feature

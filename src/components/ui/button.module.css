@@ -16,12 +16,20 @@
     font-size: var(--text-sm);
     line-height: var(--leading-normal);
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition:
+        color var(--transition-fast),
+        background-color var(--transition-fast),
+        border-color var(--transition-fast);
 }
 
 .btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+.btn:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: var(--focus-offset);
 }
 
 /*== 尺寸 ==*/
@@ -60,4 +68,10 @@
 .danger:hover:not(:disabled) {
     background: color-mix(in srgb, var(--destructive) 80%, black);
     border-color: color-mix(in srgb, var(--destructive) 80%, black);
+}
+
+@media (pointer: coarse) {
+    .btn {
+        min-height: 2.75rem;
+    }
 }

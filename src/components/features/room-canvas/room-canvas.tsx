@@ -10,6 +10,8 @@
   缩放控制：滚轮 / 右下角 ZoomControl
 ============================================================================*/
 
+import { useId } from 'react';
+
 /*== 组件导入 ==*/
 import { Brand } from '@/components/site/brand';
 import { ContextMenu, type ContextMenuEntry } from '@/components/ui/context-menu';
@@ -49,9 +51,11 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
         panOffset,
         tool,
         canvasRef,
-        handleCanvasMouseDown,
-        handleRoomMouseDown,
-        handleHandleMouseDown,
+        handleCanvasPointerDown,
+        handleRoomPointerDown,
+        handleHandlePointerDown,
+        handleRoomKeyDown,
+        selectRoom,
         handleCanvasContextMenu,
         handleRoomContextMenu,
         handleWheel,
@@ -63,8 +67,10 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
         cancelRename,
         zoomIn,
         zoomOut,
+        addRoom,
         setTool,
     } = useRoomCanvas({ gridSize });
+    const roomInstructionsId = useId();
 
     /*== 绘制预览矩形 ==*/
     const preview =
@@ -115,7 +121,9 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
             <div
                 ref={canvasRef}
                 className={cn(styles.canvas, tool === 'select' && styles.canvasSelect)}
-                onMouseDown={handleCanvasMouseDown}
+                role="region"
+                aria-label="房间布局画板"
+                onPointerDown={handleCanvasPointerDown}
                 onContextMenu={handleCanvasContextMenu}
                 onWheel={handleWheel}
                 style={{
@@ -132,6 +140,11 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                         transformOrigin: '0 0',
                     }}
                 >
+                    <p className={styles.srOnly} id={roomInstructionsId}>
+                        方向键移动房间，Shift 加方向键调整大小，Enter 或 F2 重命名，Delete 删除，Shift 加 F10
+                        打开操作菜单。
+                    </p>
+
                     {/*== 空状态提示 ==*/}
                     <Show when={rooms.length === 0 && interaction.type === 'idle' && tool === 'room'}>
                         <div className={styles.emptyHint}>点击空白处拖拽，绘制房间</div>
@@ -141,8 +154,9 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                     {rooms.map((room) => {
                         const isSelected = room.id === selectedId;
                         return (
-                            <div
+                            <button
                                 key={room.id}
+                                type="button"
                                 className={cn(styles.room, isSelected && styles.roomSelected)}
                                 style={{
                                     left: room.x,
@@ -150,7 +164,12 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                                     width: room.width,
                                     height: room.height,
                                 }}
-                                onMouseDown={(e) => handleRoomMouseDown(e, room)}
+                                aria-describedby={roomInstructionsId}
+                                aria-label={room.name}
+                                aria-pressed={isSelected}
+                                onFocus={() => selectRoom(room.id)}
+                                onKeyDown={(e) => handleRoomKeyDown(e, room)}
+                                onPointerDown={(e) => handleRoomPointerDown(e, room)}
                                 onContextMenu={(e) => handleRoomContextMenu(e, room)}
                             >
                                 <span className={styles.roomLabel}>{room.name}</span>
@@ -158,14 +177,15 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                                 {/*== 选中时显示八方向缩放手柄 ==*/}
                                 <Show when={isSelected}>
                                     {HANDLES.map((handle) => (
-                                        <div
+                                        <span
                                             key={handle}
                                             className={cn(styles.handle, styles[`handle${handle.toUpperCase()}`])}
-                                            onMouseDown={(e) => handleHandleMouseDown(e, handle)}
+                                            aria-hidden="true"
+                                            onPointerDown={(e) => handleHandlePointerDown(e, handle)}
                                         />
                                     ))}
                                 </Show>
-                            </div>
+                            </button>
                         );
                     })}
 
@@ -184,7 +204,13 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                 </div>
 
                 {/*== 顶部工具栏 ==*/}
-                <Toolbar tool={tool} onToolChange={setTool} />
+                <Toolbar
+                    tool={tool}
+                    canClear={rooms.length > 0}
+                    onAddRoom={addRoom}
+                    onClear={clearAll}
+                    onToolChange={setTool}
+                />
 
                 {/*== 左上角品牌标识 ==*/}
                 <Brand />
@@ -195,13 +221,20 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
 
             {/*== 右键菜单 ==*/}
             {contextMenu && (
-                <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    ariaLabel={contextMenu.targetType === 'room' ? '房间操作' : '画板操作'}
+                    items={contextMenuItems}
+                    onClose={closeContextMenu}
+                />
             )}
 
             {/*== 重命名弹窗 ==*/}
             <InputDialog
                 open={renamingId !== null}
                 title="修改房间名称"
+                label="房间名称"
                 placeholder="请输入房间名称"
                 initialValue={renamingRoom?.name ?? ''}
                 onConfirm={confirmRename}

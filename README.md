@@ -36,7 +36,7 @@ npm run start
 ### 代码质量检查
 
 ```bash
-# 执行 lint + typecheck
+# 执行 lint + typecheck + test
 npm run check
 ```
 
@@ -85,8 +85,8 @@ src/
 ├── styles/               # 全局样式系统
 │   ├── tokens.css        # 设计令牌
 │   └── theme.css         # 主题变量
-├── components/           # React 组件库（后续扩展）
-└── lib/                  # 工具库（后续扩展）
+├── components/           # UI、站点与业务组件
+└── lib/                  # Hooks、类型与工具函数
 ```
 
 ## 🧪 提交规范
@@ -101,6 +101,7 @@ npm run check
 
 - ✅ ESLint 检查通过
 - ✅ TypeScript 类型检查通过
+- ✅ Vitest 自动化测试通过
 - ✅ 代码格式化符合规范
 
 ## 📝 技术栈
