@@ -222,9 +222,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     const handleRoomPointerDown = useCallback(
         (e: React.PointerEvent<HTMLButtonElement>, room: Room) => {
             if (e.button !== 0) return;
-            e.preventDefault();
             e.stopPropagation();
-            e.currentTarget.focus();
             selectRoom(room.id);
             const { x, y } = getCoords(e);
             const sx = snap(x);
