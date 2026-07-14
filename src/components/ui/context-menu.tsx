@@ -81,20 +81,20 @@ export function ContextMenu({ x, y, ariaLabel, items, onClose }: ContextMenuProp
 
     /*-- 点击外部关闭 --*/
     useEffect(() => {
-        const handleDocumentClick = (e: MouseEvent) => {
+        const handleDocumentPointerDown = (e: PointerEvent) => {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
                 onClose();
             }
         };
 
-        /*-- 延迟绑定，避免触发菜单的同一次 mousedown 立即关闭 --*/
+        /*-- 延迟绑定，避免触发菜单的同一次 pointerdown 立即关闭 --*/
         const timer = setTimeout(() => {
-            document.addEventListener('mousedown', handleDocumentClick);
+            document.addEventListener('pointerdown', handleDocumentPointerDown);
         }, 0);
 
         return () => {
             clearTimeout(timer);
-            document.removeEventListener('mousedown', handleDocumentClick);
+            document.removeEventListener('pointerdown', handleDocumentPointerDown);
         };
     }, [onClose]);
 

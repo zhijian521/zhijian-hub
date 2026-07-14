@@ -109,6 +109,19 @@ describe('room canvas keyboard interaction', () => {
         expect(await screen.findByRole('button', { name: '房间 1' })).toBeInstanceOf(HTMLButtonElement);
     });
 
+    it('closes the canvas context menu on pointer down outside it', async () => {
+        render(<RoomCanvas />);
+        const canvas = screen.getByRole('region', { name: '房间布局画板' });
+
+        fireEvent.contextMenu(canvas, { clientX: 200, clientY: 200 });
+        expect(await screen.findByRole('menu', { name: '画板操作' })).toBeInstanceOf(HTMLDivElement);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        fireEvent.pointerDown(canvas, { button: 0, clientX: 300, clientY: 300, pointerId: 3 });
+        expect(screen.queryByRole('menu', { name: '画板操作' })).toBeNull();
+        fireEvent.pointerUp(window, { clientX: 300, clientY: 300, pointerId: 3 });
+    });
+
     it('adds, moves, resizes, renames and deletes a room with the keyboard', async () => {
         render(<RoomCanvas gridSize={20} />);
         fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
