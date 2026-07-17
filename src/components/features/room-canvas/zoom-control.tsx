@@ -11,6 +11,7 @@
 import { IconButton } from '@/components/ui/icon-button';
 import { MinusIcon, PlusIcon } from '@/components/ui/icons';
 
+import { CanvasOverlay } from './canvas-overlay';
 import styles from './zoom-control.module.css';
 
 /*== 类型定义 ==*/
@@ -29,20 +30,11 @@ const MAX_ZOOM = 2.0;
 
 /*== ZoomControl 缩放控制 — 右下角浮层 ==*/
 export function ZoomControl({ zoom, onZoomIn, onZoomOut }: ZoomControlProps) {
-    const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        e.stopPropagation();
-    };
-
-    const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-    };
-
     return (
-        <div className={styles.container} onContextMenu={handleContextMenu} onPointerDown={handlePointerDown}>
+        <CanvasOverlay className={styles.container}>
             <IconButton icon={<MinusIcon />} onClick={onZoomOut} disabled={zoom <= MIN_ZOOM} aria-label="缩小" />
             <span className={styles.label}>{Math.round(zoom * 100)}%</span>
             <IconButton icon={<PlusIcon />} onClick={onZoomIn} disabled={zoom >= MAX_ZOOM} aria-label="放大" />
-        </div>
+        </CanvasOverlay>
     );
 }

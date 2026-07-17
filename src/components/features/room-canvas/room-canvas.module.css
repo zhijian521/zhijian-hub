@@ -39,6 +39,12 @@
     cursor: grabbing;
 }
 
+.canvasFocusing {
+    transition:
+        background-position 800ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        background-size 800ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 /*== 缩放图层 — 包裹房间/预览，受 zoom 缩放 ==*/
 .zoomLayer {
     position: absolute;
@@ -47,6 +53,10 @@
     width: 100%;
     height: 100%;
     transform-origin: 0 0;
+}
+
+.zoomLayerFocusing {
+    transition: transform 800ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /*== 空状态提示 ==*/
@@ -85,6 +95,17 @@
     border-color: var(--primary);
     box-shadow: var(--shadow);
     z-index: 2;
+}
+
+/*-- 定位高亮：独立于持续选中态，短暂提示目标位置 --*/
+.roomHighlighted::after {
+    position: absolute;
+    inset: -6px;
+    border-radius: calc(var(--radius) + 5px);
+    box-shadow: 0 0 20px 8px color-mix(in srgb, var(--primary) 18%, transparent);
+    content: '';
+    pointer-events: none;
+    animation: roomHighlight 1.8s ease-out both;
 }
 
 /*== 房间标签 ==*/
@@ -173,4 +194,28 @@
     left: -5px;
     transform: translateY(-50%);
     cursor: ew-resize;
+}
+
+@keyframes roomHighlight {
+    0% {
+        opacity: 0;
+    }
+    16% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .canvasFocusing,
+    .zoomLayerFocusing {
+        transition: none;
+    }
+
+    .roomHighlighted::after {
+        opacity: 0.7;
+        animation: none;
+    }
 }

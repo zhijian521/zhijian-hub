@@ -11,6 +11,7 @@ import { useState, useEffect, useRef, useCallback, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 import styles from './input-dialog.module.css';
 
@@ -76,10 +77,9 @@ export function InputDialog({
             <label className={styles.label} htmlFor={inputId}>
                 {label}
             </label>
-            <input
+            <Input
                 id={inputId}
                 ref={inputRef}
-                className={styles.input}
                 autoComplete="off"
                 placeholder={placeholder}
                 value={value}

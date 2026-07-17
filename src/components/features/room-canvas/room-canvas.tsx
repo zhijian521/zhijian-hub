@@ -24,6 +24,7 @@ import { useRoomCanvas } from '@/lib/hooks/use-room-canvas';
 import type { ResizeHandle } from '@/lib/types/room-canvas';
 
 /*== 同目录组件 ==*/
+import { CanvasActions } from './canvas-actions';
 import { Toolbar } from './toolbar';
 import { ZoomControl } from './zoom-control';
 
@@ -46,11 +47,13 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
         canUndo,
         canRedo,
         selectedId,
+        highlightedId,
         interaction,
         contextMenu,
         renamingId,
         zoom,
         panOffset,
+        isFocusing,
         tool,
         canvasRef,
         handleCanvasPointerDown,
@@ -70,6 +73,7 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
         zoomIn,
         zoomOut,
         addRoom,
+        focusRoom,
         undo,
         redo,
         setTool,
@@ -124,7 +128,11 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
         <>
             <div
                 ref={canvasRef}
-                className={cn(styles.canvas, tool === 'select' && styles.canvasSelect)}
+                className={cn(
+                    styles.canvas,
+                    tool === 'select' && styles.canvasSelect,
+                    isFocusing && styles.canvasFocusing
+                )}
                 role="region"
                 aria-label="房间布局画板"
                 onPointerDown={handleCanvasPointerDown}
@@ -138,7 +146,7 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
             >
                 {/*== 房间缩放容器 ==*/}
                 <div
-                    className={styles.zoomLayer}
+                    className={cn(styles.zoomLayer, isFocusing && styles.zoomLayerFocusing)}
                     style={{
                         transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
                         transformOrigin: '0 0',
@@ -157,11 +165,16 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                     {/*== 房间矩形 ==*/}
                     {rooms.map((room) => {
                         const isSelected = room.id === selectedId;
+                        const isHighlighted = room.id === highlightedId;
                         return (
                             <button
                                 key={room.id}
                                 type="button"
-                                className={cn(styles.room, isSelected && styles.roomSelected)}
+                                className={cn(
+                                    styles.room,
+                                    isSelected && styles.roomSelected,
+                                    isHighlighted && styles.roomHighlighted
+                                )}
                                 style={{
                                     left: room.x,
                                     top: room.y,
@@ -171,6 +184,7 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                                 aria-describedby={roomInstructionsId}
                                 aria-label={room.name}
                                 aria-pressed={isSelected}
+                                data-highlighted={isHighlighted ? 'true' : undefined}
                                 onFocus={() => selectRoom(room.id)}
                                 onKeyDown={(e) => handleRoomKeyDown(e, room)}
                                 onPointerDown={(e) => handleRoomPointerDown(e, room)}
@@ -219,6 +233,9 @@ export function RoomCanvas({ gridSize = 20 }: RoomCanvasProps) {
                     onRedo={redo}
                     onToolChange={setTool}
                 />
+
+                {/*== 右上角画板功能区 ==*/}
+                <CanvasActions rooms={rooms} selectedId={selectedId} gridSize={gridSize} onFocusRoom={focusRoom} />
 
                 {/*== 左上角品牌标识 ==*/}
                 <Brand />

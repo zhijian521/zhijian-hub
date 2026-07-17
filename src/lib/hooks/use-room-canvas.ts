@@ -34,11 +34,13 @@ interface UseRoomCanvasReturn {
     canUndo: boolean;
     canRedo: boolean;
     selectedId: string | null;
+    highlightedId: string | null;
     interaction: InteractionState;
     contextMenu: ContextMenuState | null;
     renamingId: string | null;
     zoom: number;
     panOffset: { x: number; y: number };
+    isFocusing: boolean;
     tool: Tool;
     canvasRef: React.RefObject<HTMLDivElement | null>;
     handleCanvasPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
@@ -58,6 +60,7 @@ interface UseRoomCanvasReturn {
     zoomIn: () => void;
     zoomOut: () => void;
     addRoom: () => void;
+    focusRoom: (id: string) => void;
     undo: () => void;
     redo: () => void;
     setTool: (tool: Tool) => void;
@@ -77,6 +80,9 @@ const ZOOM_STEP = 0.1;
 const DEFAULT_ROOM_WIDTH_IN_GRIDS = 6;
 const DEFAULT_ROOM_HEIGHT_IN_GRIDS = 4;
 const HISTORY_LIMIT = 50;
+const FOCUS_VIEWPORT_PADDING = 96;
+const FOCUS_TRANSITION_DURATION = 800;
+const HIGHLIGHT_DURATION = 1800;
 
 /*== 缩放钳制函数 ==*/
 function clampZoom(z: number): number {
@@ -124,11 +130,13 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     const [canUndo, setCanUndo] = useState(false);
     const [canRedo, setCanRedo] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [highlightedId, setHighlightedId] = useState<string | null>(null);
     const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [zoom, setZoom] = useState(1);
     const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+    const [isFocusing, setIsFocusing] = useState(false);
     const [tool, setTool] = useState<Tool>('room');
 
     /*== Refs：避免事件监听器闭包过期 ==*/
@@ -142,6 +150,8 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     const roomCounter = useRef(0);
     const historyRef = useRef<RoomHistory>({ past: [], future: [] });
     const interactionStartRoomsRef = useRef<Room[] | null>(null);
+    const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const focusTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         interactionRef.current = interaction;
@@ -161,6 +171,13 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     useEffect(() => {
         zoomRef.current = zoom;
     }, [zoom]);
+
+    useEffect(() => {
+        return () => {
+            if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+            if (focusTransitionTimerRef.current) clearTimeout(focusTransitionTimerRef.current);
+        };
+    }, []);
 
     /*== 网格吸附 ==*/
     const snap = useCallback(
@@ -284,11 +301,18 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         setSelectedId(id);
     }, []);
 
+    const cancelFocusTransition = useCallback(() => {
+        if (focusTransitionTimerRef.current) clearTimeout(focusTransitionTimerRef.current);
+        focusTransitionTimerRef.current = null;
+        setIsFocusing(false);
+    }, []);
+
     /*== 画板指针按下：根据当前工具决定行为 ==*/
     const handleCanvasPointerDown = useCallback(
         (e: React.PointerEvent) => {
             if (e.button !== 0) return;
             e.preventDefault();
+            cancelFocusTransition();
             interactionStartRoomsRef.current = null;
 
             /*-- 选取工具：开始拖拽画布 --*/
@@ -322,7 +346,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
                 currentY: sy,
             });
         },
-        [getCoords, snap, updateInteraction]
+        [cancelFocusTransition, getCoords, snap, updateInteraction]
     );
 
     /*== 房间指针按下：开始移动 ==*/
@@ -330,6 +354,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         (e: React.PointerEvent<HTMLButtonElement>, room: Room) => {
             if (e.button !== 0) return;
             e.stopPropagation();
+            cancelFocusTransition();
             selectRoom(room.id);
             interactionStartRoomsRef.current = roomsRef.current;
             const { x, y } = getCoords(e);
@@ -343,7 +368,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
                 offsetY: sy - room.y,
             });
         },
-        [getCoords, selectRoom, snap, updateInteraction]
+        [cancelFocusTransition, getCoords, selectRoom, snap, updateInteraction]
     );
 
     /*== 手柄指针按下：开始缩放 ==*/
@@ -352,6 +377,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
             if (e.button !== 0) return;
             e.preventDefault();
             e.stopPropagation();
+            cancelFocusTransition();
             const room = roomsRef.current.find((currentRoom) => currentRoom.id === selectedIdRef.current);
             if (!room) return;
             interactionStartRoomsRef.current = roomsRef.current;
@@ -363,7 +389,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
                 startRect: { x: room.x, y: room.y, width: room.width, height: room.height },
             });
         },
-        [updateInteraction]
+        [cancelFocusTransition, updateInteraction]
     );
 
     /*== 将一次指针移动应用到当前交互 ==*/
@@ -560,6 +586,49 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         });
     }, [appendRoom, gridSize, snap]);
 
+    /*== 定位房间：保持当前缩放优先，必要时缩小以完整展示目标 ==*/
+    const focusRoom = useCallback(
+        (id: string) => {
+            const canvas = canvasRef.current;
+            const room = roomsRef.current.find((currentRoom) => currentRoom.id === id);
+            if (!canvas || !room) return;
+
+            cancelFocusTransition();
+
+            const { width: canvasWidth, height: canvasHeight } = canvas.getBoundingClientRect();
+            const availableWidth = Math.max(1, canvasWidth - FOCUS_VIEWPORT_PADDING * 2);
+            const availableHeight = Math.max(1, canvasHeight - FOCUS_VIEWPORT_PADDING * 2);
+            const fitZoom = clampZoom(Math.min(availableWidth / room.width, availableHeight / room.height));
+            const nextZoom = Math.min(zoomRef.current, fitZoom);
+            const nextPan = {
+                x: canvasWidth / 2 - (room.x + room.width / 2) * nextZoom,
+                y: canvasHeight / 2 - (room.y + room.height / 2) * nextZoom,
+            };
+
+            selectedIdRef.current = id;
+            zoomRef.current = nextZoom;
+            panOffsetRef.current = nextPan;
+            setSelectedId(id);
+            setZoom(nextZoom);
+            setPanOffset(nextPan);
+            setIsFocusing(true);
+            setContextMenu(null);
+            setHighlightedId(id);
+
+            if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+            if (focusTransitionTimerRef.current) clearTimeout(focusTransitionTimerRef.current);
+            highlightTimerRef.current = setTimeout(() => {
+                setHighlightedId(null);
+                highlightTimerRef.current = null;
+            }, HIGHLIGHT_DURATION);
+            focusTransitionTimerRef.current = setTimeout(() => {
+                setIsFocusing(false);
+                focusTransitionTimerRef.current = null;
+            }, FOCUS_TRANSITION_DURATION);
+        },
+        [cancelFocusTransition]
+    );
+
     /*== 房间键盘操作：移动、调整大小、重命名、删除、打开菜单 ==*/
     const handleRoomKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLButtonElement>, room: Room) => {
@@ -651,31 +720,35 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     );
 
     /*== 以画布视口中心为锚点缩放，保持中心内容不偏移 ==*/
-    const setZoomAtCanvasCenter = useCallback((nextZoom: number) => {
-        const currentZoom = zoomRef.current;
-        const zoom = clampZoom(nextZoom);
-        if (zoom === currentZoom) return;
+    const setZoomAtCanvasCenter = useCallback(
+        (nextZoom: number) => {
+            const currentZoom = zoomRef.current;
+            const zoom = clampZoom(nextZoom);
+            if (zoom === currentZoom) return;
+            cancelFocusTransition();
 
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const { width, height } = canvas.getBoundingClientRect();
-            const currentPan = panOffsetRef.current;
-            const centerX = width / 2;
-            const centerY = height / 2;
-            const worldX = (centerX - currentPan.x) / currentZoom;
-            const worldY = (centerY - currentPan.y) / currentZoom;
-            const nextPan = {
-                x: centerX - worldX * zoom,
-                y: centerY - worldY * zoom,
-            };
+            const canvas = canvasRef.current;
+            if (canvas) {
+                const { width, height } = canvas.getBoundingClientRect();
+                const currentPan = panOffsetRef.current;
+                const centerX = width / 2;
+                const centerY = height / 2;
+                const worldX = (centerX - currentPan.x) / currentZoom;
+                const worldY = (centerY - currentPan.y) / currentZoom;
+                const nextPan = {
+                    x: centerX - worldX * zoom,
+                    y: centerY - worldY * zoom,
+                };
 
-            panOffsetRef.current = nextPan;
-            setPanOffset(nextPan);
-        }
+                panOffsetRef.current = nextPan;
+                setPanOffset(nextPan);
+            }
 
-        zoomRef.current = zoom;
-        setZoom(zoom);
-    }, []);
+            zoomRef.current = zoom;
+            setZoom(zoom);
+        },
+        [cancelFocusTransition]
+    );
 
     /*== 滚轮缩放：直接滚动，不触发浏览器默认行为 ==*/
     const handleWheel = useCallback(
@@ -695,11 +768,13 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         canUndo,
         canRedo,
         selectedId,
+        highlightedId,
         interaction,
         contextMenu,
         renamingId,
         zoom,
         panOffset,
+        isFocusing,
         tool,
         canvasRef,
         handleCanvasPointerDown,
@@ -719,6 +794,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
         zoomIn,
         zoomOut,
         addRoom,
+        focusRoom,
         undo,
         redo,
         setTool,

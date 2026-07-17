@@ -9,6 +9,7 @@ import { HandIcon, PlusIcon, RedoIcon, RoomIcon, TrashIcon, UndoIcon } from '@/c
 import { cn } from '@/lib/utils/cn';
 import type { Tool } from '@/lib/types/room-canvas';
 
+import { CanvasOverlay } from './canvas-overlay';
 import styles from './toolbar.module.css';
 
 /*== 工具条目定义 ==*/
@@ -51,23 +52,8 @@ export function Toolbar({
     canClear,
     onClear,
 }: ToolbarProps) {
-    const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        e.stopPropagation();
-    };
-
-    const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-    };
-
     return (
-        <div
-            className={styles.container}
-            role="toolbar"
-            aria-label="画板工具"
-            onContextMenu={handleContextMenu}
-            onPointerDown={handlePointerDown}
-        >
+        <CanvasOverlay className={styles.container} role="toolbar" aria-label="画板工具">
             {TOOLS.map((item) => (
                 <button
                     key={item.id}
@@ -115,6 +101,6 @@ export function Toolbar({
             >
                 <TrashIcon />
             </button>
-        </div>
+        </CanvasOverlay>
     );
 }

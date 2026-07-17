@@ -4,39 +4,11 @@
   仅包含输入框和按钮区样式，弹窗外壳由 Dialog 组件提供
 ============================================================================*/
 
-/*== 输入框 ==*/
 .label {
     display: block;
     margin-bottom: var(--space-2);
     font-size: var(--text-sm);
     color: var(--foreground);
-}
-
-.input {
-    box-sizing: border-box;
-    width: 100%;
-    padding: var(--space-2) var(--space-3);
-    font-family: inherit;
-    font-size: var(--text-sm);
-    line-height: var(--leading-normal);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--foreground);
-    outline: none;
-    transition:
-        border-color var(--transition-fast),
-        box-shadow var(--transition-fast);
-}
-
-.input::placeholder {
-    color: var(--muted-foreground);
-    opacity: 1;
-}
-
-.input:focus-visible {
-    border-color: var(--primary);
-    box-shadow: var(--focus-ring);
 }
 
 /*== 按钮区 ==*/

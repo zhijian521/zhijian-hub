@@ -46,6 +46,7 @@ export const STROKE_ICONS: Record<string, React.ReactNode> = {
     undo: <path d="m9 14-5-5 5-5M4 9h9a7 7 0 0 1 7 7v1" strokeLinecap="round" strokeLinejoin="round" />,
     redo: <path d="m15 14 5-5-5-5m5 5h-9a7 7 0 0 0-7 7v1" strokeLinecap="round" strokeLinejoin="round" />,
     trash: <path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6" strokeLinecap="round" strokeLinejoin="round" />,
+    search: <path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />,
 };
 
 /*============================================================================
@@ -92,3 +93,4 @@ export const RoomIcon = makeIcon('room');
 export const UndoIcon = makeIcon('undo');
 export const RedoIcon = makeIcon('redo');
 export const TrashIcon = makeIcon('trash');
+export const SearchIcon = makeIcon('search');

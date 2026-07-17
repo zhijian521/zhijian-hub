@@ -87,6 +87,72 @@ describe('accessible overlays', () => {
 });
 
 describe('room canvas keyboard interaction', () => {
+    it('searches rooms and focuses the selected result on the canvas', async () => {
+        render(<RoomCanvas gridSize={20} />);
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+
+        fireEvent.click(screen.getByRole('button', { name: '搜索' }));
+        const input = screen.getByRole('searchbox', { name: '搜索画板内容' });
+        await waitFor(() => expect(document.activeElement).toBe(input));
+        fireEvent.change(input, { target: { value: '房间 2' } });
+
+        expect(screen.queryByRole('button', { name: '定位到房间 1' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: '定位到房间 2' }));
+
+        const room = screen.getByRole('button', { name: '房间 2' });
+        expect(room.getAttribute('aria-pressed')).toBe('true');
+        expect(room.dataset.highlighted).toBe('true');
+        expect(screen.queryByRole('region', { name: '搜索画板' })).toBeNull();
+    });
+
+    it('cancels the focus transition before a new canvas interaction', () => {
+        render(<RoomCanvas />);
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+        fireEvent.click(screen.getByRole('button', { name: '查看全部房间，共 1 个' }));
+        fireEvent.click(screen.getByRole('button', { name: '定位到房间 1' }));
+
+        const canvas = screen.getByRole('region', { name: '房间布局画板' });
+        expect(canvas.className).toContain('canvasFocusing');
+
+        fireEvent.pointerDown(canvas, { button: 0, clientX: 100, clientY: 100, pointerId: 10 });
+        expect(canvas.className).not.toContain('canvasFocusing');
+        fireEvent.pointerUp(window, { clientX: 100, clientY: 100, pointerId: 10 });
+    });
+
+    it('shows all rooms, switches panels and restores focus after Escape', async () => {
+        render(<RoomCanvas />);
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+
+        const roomsTrigger = screen.getByRole('button', { name: '查看全部房间，共 2 个' });
+        fireEvent.click(roomsTrigger);
+        expect(screen.getByRole('region', { name: '全部房间' })).toBeInstanceOf(HTMLElement);
+        expect(screen.getAllByRole('button', { name: /^定位到房间/ })).toHaveLength(2);
+
+        const searchTrigger = screen.getByRole('button', { name: '搜索' });
+        fireEvent.click(searchTrigger);
+        expect(screen.queryByRole('region', { name: '全部房间' })).toBeNull();
+
+        const input = screen.getByRole('searchbox', { name: '搜索画板内容' });
+        await waitFor(() => expect(document.activeElement).toBe(input));
+        fireEvent.keyDown(input, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('region', { name: '搜索画板' })).toBeNull());
+        await waitFor(() => expect(document.activeElement).toBe(searchTrigger));
+    });
+
+    it('does not start canvas interaction from the feature panel', () => {
+        render(<RoomCanvas />);
+        fireEvent.click(screen.getByRole('button', { name: '搜索' }));
+        const input = screen.getByRole('searchbox', { name: '搜索画板内容' });
+
+        fireEvent.pointerDown(input, { button: 0, clientX: 100, clientY: 100, pointerId: 9 });
+        fireEvent.pointerMove(window, { clientX: 220, clientY: 180, pointerId: 9 });
+        fireEvent.pointerUp(window, { clientX: 220, clientY: 180, pointerId: 9 });
+
+        expect(screen.queryByRole('button', { name: /^房间 \d+$/ })).toBeNull();
+    });
+
     it('undoes and redoes room creation from the toolbar', () => {
         render(<RoomCanvas />);
         const addRoom = screen.getByRole('button', { name: '添加房间' });
@@ -138,6 +204,18 @@ describe('room canvas keyboard interaction', () => {
         fireEvent.pointerDown(selectTool, { button: 0, clientX: 100, clientY: 100, pointerId: 1 });
         fireEvent.pointerMove(window, { clientX: 220, clientY: 180, pointerId: 1 });
         fireEvent.pointerUp(window, { clientX: 220, clientY: 180, pointerId: 1 });
+
+        expect(screen.queryByRole('button', { name: /^房间 \d+$/ })).toBeNull();
+    });
+
+    it('does not start canvas interaction from zoom control pointer events', () => {
+        render(<RoomCanvas />);
+        fireEvent.click(screen.getByRole('button', { name: '房间' }));
+        const zoomIn = screen.getByRole('button', { name: '放大' });
+
+        fireEvent.pointerDown(zoomIn, { button: 0, clientX: 100, clientY: 100, pointerId: 8 });
+        fireEvent.pointerMove(window, { clientX: 220, clientY: 180, pointerId: 8 });
+        fireEvent.pointerUp(window, { clientX: 220, clientY: 180, pointerId: 8 });
 
         expect(screen.queryByRole('button', { name: /^房间 \d+$/ })).toBeNull();
     });
