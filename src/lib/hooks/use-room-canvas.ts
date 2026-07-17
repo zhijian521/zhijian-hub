@@ -16,6 +16,7 @@ import { useKeyPress } from '@/lib/hooks/use-key-press';
 
 /*== 工具函数 ==*/
 import { computeResizedRect, createRoom, MIN_ROOM_SIZE } from '@/lib/utils/room-canvas';
+import { loadRoomCanvasDocument, saveRoomCanvasDocument } from '@/lib/utils/room-canvas-storage';
 
 /*== 类型导入 ==*/
 import type { Room, ResizeHandle, InteractionState, Rect, ContextMenuState, Tool } from '@/lib/types/room-canvas';
@@ -83,6 +84,7 @@ const HISTORY_LIMIT = 50;
 const FOCUS_VIEWPORT_PADDING = 96;
 const FOCUS_TRANSITION_DURATION = 800;
 const HIGHLIGHT_DURATION = 1800;
+const STORAGE_SAVE_DELAY = 300;
 
 /*== 缩放钳制函数 ==*/
 function clampZoom(z: number): number {
@@ -137,6 +139,7 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
     const [zoom, setZoom] = useState(1);
     const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
     const [isFocusing, setIsFocusing] = useState(false);
+    const [isStorageReady, setIsStorageReady] = useState(false);
     const [tool, setTool] = useState<Tool>('room');
 
     /*== Refs：避免事件监听器闭包过期 ==*/
@@ -178,6 +181,37 @@ export function useRoomCanvas(options: UseRoomCanvasOptions = {}): UseRoomCanvas
             if (focusTransitionTimerRef.current) clearTimeout(focusTransitionTimerRef.current);
         };
     }, []);
+
+    useEffect(() => {
+        const document = loadRoomCanvasDocument();
+        if (document) {
+            roomsRef.current = document.rooms;
+            roomCounter.current = document.roomSequence;
+            setRooms(document.rooms);
+        }
+        setIsStorageReady(true);
+    }, []);
+
+    useEffect(() => {
+        if (!isStorageReady) return;
+
+        const timeout = window.setTimeout(() => {
+            saveRoomCanvasDocument({ version: 1, roomSequence: roomCounter.current, rooms });
+        }, STORAGE_SAVE_DELAY);
+
+        return () => window.clearTimeout(timeout);
+    }, [isStorageReady, rooms]);
+
+    useEffect(() => {
+        if (!isStorageReady) return;
+
+        const handlePageHide = () => {
+            saveRoomCanvasDocument({ version: 1, roomSequence: roomCounter.current, rooms: roomsRef.current });
+        };
+
+        window.addEventListener('pagehide', handlePageHide);
+        return () => window.removeEventListener('pagehide', handlePageHide);
+    }, [isStorageReady]);
 
     /*== 网格吸附 ==*/
     const snap = useCallback(

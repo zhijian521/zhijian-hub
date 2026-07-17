@@ -6,8 +6,12 @@ import { RoomCanvas } from '@/components/features/room-canvas/room-canvas';
 import { ContextMenu } from '@/components/ui/context-menu';
 import { Dialog } from '@/components/ui/dialog';
 import { InputDialog } from '@/components/ui/input-dialog';
+import { ROOM_CANVAS_STORAGE_KEY } from '@/lib/utils/room-canvas-storage';
 
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+});
 
 function DialogHarness() {
     const [open, setOpen] = useState(false);
@@ -87,6 +91,30 @@ describe('accessible overlays', () => {
 });
 
 describe('room canvas keyboard interaction', () => {
+    it('restores rooms, keeps the next name and persists clearing the canvas', async () => {
+        render(<RoomCanvas />);
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+        await waitFor(() => expect(window.localStorage.getItem(ROOM_CANVAS_STORAGE_KEY)).not.toBeNull());
+
+        cleanup();
+        render(<RoomCanvas />);
+        expect(await screen.findByRole('button', { name: '房间 1' })).toBeInstanceOf(HTMLButtonElement);
+
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+        expect(screen.getByRole('button', { name: '房间 2' })).toBeInstanceOf(HTMLButtonElement);
+        fireEvent.click(screen.getByRole('button', { name: '清空画板' }));
+        await waitFor(() => {
+            const document = JSON.parse(window.localStorage.getItem(ROOM_CANVAS_STORAGE_KEY) ?? '{}') as {
+                rooms?: unknown[];
+            };
+            expect(document.rooms).toEqual([]);
+        });
+
+        cleanup();
+        render(<RoomCanvas />);
+        await waitFor(() => expect(screen.queryByRole('button', { name: /^房间 \d+$/ })).toBeNull());
+    });
+
     it('searches rooms and focuses the selected result on the canvas', async () => {
         render(<RoomCanvas gridSize={20} />);
         fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
