@@ -39,7 +39,7 @@ npm run start
 ### 代码质量检查
 
 ```bash
-# 执行 lint + typecheck + test
+# 执行 format:check + lint + typecheck + test
 npm run check
 ```
 

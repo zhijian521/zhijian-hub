@@ -64,6 +64,7 @@ Thumbs.db
 # =====================================
 .idea/
 .vscode/
+.obsidian/
 *.suo
 *.ntvs*
 *.njsproj
