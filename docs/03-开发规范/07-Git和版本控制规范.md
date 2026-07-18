@@ -1,17 +1,23 @@
-# 06 · Git 和版本控制规范
+# 07 · Git 和版本控制规范
+
+- 文档状态：开发规范
+- 适用版本：`zhijian-hub@0.1.0`
+- 最后更新：2026-07-18
+- 维护范围：分支、提交、审查和版本发布规则
+- 关联代码：`.gitignore`、`package.json`
 
 ## 分支策略
 
 ### 分支命名规范
 
-| 类型 | 前缀 | 示例 | 用途 |
-|------|------|------|-----|
-| 功能开发 | `feat/` | `feat/user-login` | 新功能开发 |
-| Bug修复 | `fix/` | `fix/login-validation` | 修复已知问题 |
-| 重构 | `refactor/` | `refactor/api-service` | 代码重构 |
-| 文档更新 | `docs/` | `docs/api-spec` | 文档相关修改 |
-| 测试相关 | `test/` | `test/user-component` | 测试代码 |
-| 构建相关 | `build/` | `build/docker-config` | 构建配置 |
+| 类型     | 前缀        | 示例                   | 用途         |
+| -------- | ----------- | ---------------------- | ------------ |
+| 功能开发 | `feat/`     | `feat/user-login`      | 新功能开发   |
+| Bug修复  | `fix/`      | `fix/login-validation` | 修复已知问题 |
+| 重构     | `refactor/` | `refactor/api-service` | 代码重构     |
+| 文档更新 | `docs/`     | `docs/api-spec`        | 文档相关修改 |
+| 测试相关 | `test/`     | `test/user-component`  | 测试代码     |
+| 构建相关 | `build/`    | `build/docker-config`  | 构建配置     |
 
 ### 主要分支
 
@@ -33,15 +39,15 @@
 
 ### Type 类型
 
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| feat | 新功能 | `feat(auth): add user login` |
-| fix | Bug修复 | `fix(api): handle null response` |
-| docs | 文档更新 | `docs: update API specification` |
-| style | 代码格式 | `style: format with prettier` |
+| 类型     | 说明     | 示例                               |
+| -------- | -------- | ---------------------------------- |
+| feat     | 新功能   | `feat(auth): add user login`       |
+| fix      | Bug修复  | `fix(api): handle null response`   |
+| docs     | 文档更新 | `docs: update API specification`   |
+| style    | 代码格式 | `style: format with prettier`      |
 | refactor | 代码重构 | `refactor(service): extract utils` |
-| test | 测试相关 | `test(component): add unit tests` |
-| chore | 构建任务 | `chore(deps): update dependencies` |
+| test     | 测试相关 | `test(component): add unit tests`  |
+| chore    | 构建任务 | `chore(deps): update dependencies` |
 
 ### Scope 范围（可选）
 
@@ -117,6 +123,7 @@ BREAKING CHANGE: Old endpoint /api/users/:id is no longer supported
 ### PR 标题格式
 
 与 commit 格式保持一致：
+
 - `feat: add new dashboard feature`
 - `fix: resolve login validation issue`
 - `refactor: improve component structure`
@@ -125,28 +132,35 @@ BREAKING CHANGE: Old endpoint /api/users/:id is no longer supported
 
 ```markdown
 ## 问题/需求
+
 简述这个 PR 要解决的问题或实现的功能
 
 ## 实现方案
+
 详细描述实现方案和关键技术点
 
 ## 修改内容
+
 - [ ] 新增文件
 - [ ] 修改文件
 - [ ] 删除文件
 
 ## 测试情况
+
 - [ ] 单元测试
 - [ ] 集成测试
 - [ ] 手动测试
 
 ## Breaking Changes
+
 如有不向后兼容的变更，请说明
 
 ## 截图/录屏
+
 如有 UI 变更，提供截图
 
 ## 相关 Issue
+
 Closes #xxx 或 Related to #xxx
 ```
 
@@ -219,15 +233,15 @@ git push origin --delete feat/new-feature
 ## 安全最佳实践
 
 1. **敏感信息保护**
-   - 不在代码中硬编码密码、密钥
-   - 使用环境变量或配置文件
-   - .gitignore 中忽略敏感文件
+    - 不在代码中硬编码密码、密钥
+    - 使用环境变量或配置文件
+    - .gitignore 中忽略敏感文件
 
 2. **提交信息安全**
-   - 不在 commit message 中包含敏感信息
-   - 不在描述中暴露内部实现细节
+    - 不在 commit message 中包含敏感信息
+    - 不在描述中暴露内部实现细节
 
 3. **权限控制**
-   - 主分支设置保护规则
-   - 重要操作需要审核
-   - 定期审查团队成员权限
+    - 主分支设置保护规则
+    - 重要操作需要审核
+    - 定期审查团队成员权限
