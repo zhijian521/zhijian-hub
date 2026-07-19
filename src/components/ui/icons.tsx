@@ -43,6 +43,17 @@ export const STROKE_ICONS: Record<string, React.ReactNode> = {
             strokeLinejoin="round"
         />
     ),
+    furniture: (
+        <path
+            d="M5 3h14a1 1 0 0 1 1 1v16H4V4a1 1 0 0 1 1-1Zm7 0v17M7 7h2m6 0h2M6 20v1m12-1v1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    ),
+    storage: <path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6M7 20v1m10-1v1" strokeLinecap="round" strokeLinejoin="round" />,
+    item: <path d="m4 8 8-4 8 4-8 4-8-4Zm0 0v8l8 4 8-4V8m-8 4v8" strokeLinecap="round" strokeLinejoin="round" />,
+    edit: <path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4Zm9-13 4 4" strokeLinecap="round" strokeLinejoin="round" />,
+    details: <path d="M5 5h14v14H5zM8 9h8M8 12h8M8 15h5" strokeLinecap="round" strokeLinejoin="round" />,
     undo: <path d="m9 14-5-5 5-5M4 9h9a7 7 0 0 1 7 7v1" strokeLinecap="round" strokeLinejoin="round" />,
     redo: <path d="m15 14 5-5-5-5m5 5h-9a7 7 0 0 0-7 7v1" strokeLinecap="round" strokeLinejoin="round" />,
     trash: <path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6" strokeLinecap="round" strokeLinejoin="round" />,
@@ -90,6 +101,11 @@ export const MinusIcon = makeIcon('minus');
 export const PlusIcon = makeIcon('plus');
 export const HandIcon = makeIcon('hand');
 export const RoomIcon = makeIcon('room');
+export const FurnitureIcon = makeIcon('furniture');
+export const StorageIcon = makeIcon('storage');
+export const ItemIcon = makeIcon('item');
+export const EditIcon = makeIcon('edit');
+export const DetailsIcon = makeIcon('details');
 export const UndoIcon = makeIcon('undo');
 export const RedoIcon = makeIcon('redo');
 export const TrashIcon = makeIcon('trash');

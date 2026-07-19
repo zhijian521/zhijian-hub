@@ -7,6 +7,20 @@
 /*== 工具类型：选取（拖拽画布）/ 创建房间 ==*/
 export type Tool = 'select' | 'room';
 
+export type CanvasEntityKind = 'room' | 'furniture' | 'storage-device';
+
+export type CanvasDrawingKind = 'furniture' | 'storage-device';
+
+export interface CanvasDrawingTarget {
+    kind: CanvasDrawingKind;
+    roomId: string;
+}
+
+export interface CanvasSelection {
+    kind: CanvasEntityKind;
+    id: string;
+}
+
 /*== 房间矩形 ==*/
 export interface Room {
     /*-- 唯一标识 --*/
@@ -23,6 +37,67 @@ export interface Room {
     height: number;
 }
 
+/*== 家具 ==*/
+export interface Furniture {
+    id: string;
+    roomId: string;
+    name: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+/*== 储物设备 ==*/
+interface StorageDeviceBase {
+    id: string;
+    name: string;
+}
+
+export interface RoomStorageDevice extends StorageDeviceBase {
+    location: { kind: 'room'; roomId: string };
+    rect: Rect;
+}
+
+export interface FurnitureStorageDevice extends StorageDeviceBase {
+    location: { kind: 'furniture'; furnitureId: string };
+}
+
+export type StorageDevice = RoomStorageDevice | FurnitureStorageDevice;
+
+/*== 物品 ==*/
+export type ItemLocation =
+    | { kind: 'room'; roomId: string }
+    | { kind: 'furniture'; furnitureId: string }
+    | { kind: 'storage-device'; storageDeviceId: string };
+
+export interface Item {
+    id: string;
+    name: string;
+    quantity: number;
+    location: ItemLocation;
+}
+
+/*== 画板领域内容与版本化文档 ==*/
+export interface CanvasContent {
+    rooms: Room[];
+    furniture: Furniture[];
+    storageDevices: StorageDevice[];
+    items: Item[];
+}
+
+export interface CanvasCounters {
+    room: number;
+    furniture: number;
+    storageDevice: number;
+    item: number;
+}
+
+export interface CanvasDocumentV2 extends CanvasContent {
+    version: 2;
+    counters: CanvasCounters;
+}
+
 /*== 缩放手柄方位 ==*/
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
@@ -30,8 +105,18 @@ export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export type InteractionState =
     | { type: 'idle' }
     | {
-          type: 'drawing';
+          type: 'drawing-room';
           pointerId: number;
+          startX: number;
+          startY: number;
+          currentX: number;
+          currentY: number;
+      }
+    | {
+          type: 'drawing-child';
+          pointerId: number;
+          entityKind: CanvasDrawingKind;
+          roomId: string;
           startX: number;
           startY: number;
           currentX: number;
@@ -40,17 +125,19 @@ export type InteractionState =
     | {
           type: 'moving';
           pointerId: number;
+          entityKind: CanvasEntityKind;
           id: string;
-          /*-- 鼠标相对房间左上角的偏移 --*/
+          /*-- 鼠标相对实体左上角的偏移 --*/
           offsetX: number;
           offsetY: number;
       }
     | {
           type: 'resizing';
           pointerId: number;
+          entityKind: CanvasEntityKind;
           id: string;
           handle: ResizeHandle;
-          /*-- 缩放起始时的房间矩形 --*/
+          /*-- 缩放起始时的实体矩形 --*/
           startRect: { x: number; y: number; width: number; height: number };
       }
     | {
@@ -70,10 +157,10 @@ export interface ContextMenuState {
     x: number;
     /*-- 视口 Y 坐标 --*/
     y: number;
-    /*-- 菜单类型：画板空白处 / 房间上 --*/
-    targetType: 'canvas' | 'room';
-    /*-- 目标房间 ID（仅 targetType === 'room' 时存在） --*/
-    roomId?: string;
+    /*-- 菜单类型：画板空白处 / 房间 / 家具 / 房间级储物设备 --*/
+    targetType: 'canvas' | CanvasEntityKind;
+    /*-- 目标实体 ID（画板菜单不存在） --*/
+    targetId?: string;
 }
 
 /*== 矩形尺寸（用于工具函数） ==*/

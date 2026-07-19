@@ -8,7 +8,7 @@
 .menu {
     position: fixed;
     z-index: 60;
-    min-width: 8rem;
+    min-width: 10rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--popover);
@@ -20,7 +20,10 @@
 
 /*== 菜单项 ==*/
 .item {
-    display: block;
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2);
     width: 100%;
     padding: var(--space-2) var(--space-4);
     border: none;
@@ -34,6 +37,22 @@
     transition:
         color var(--transition-fast),
         background-color var(--transition-fast);
+}
+
+.itemIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted-foreground);
+}
+
+.itemIcon svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.item:hover:not(:disabled) .itemIcon {
+    color: currentColor;
 }
 
 /*== 菜单项 hover ==*/

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { RoomCanvas } from '@/components/features/room-canvas/room-canvas';
@@ -11,7 +11,39 @@ import { ROOM_CANVAS_STORAGE_KEY } from '@/lib/utils/room-canvas-storage';
 afterEach(() => {
     cleanup();
     window.localStorage.clear();
+    vi.restoreAllMocks();
 });
+
+function mockCanvasSize(canvas: HTMLElement) {
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600,
+        toJSON: () => ({}),
+    });
+}
+
+async function createRoomWithFurniture() {
+    const canvas = screen.getByRole('region', { name: '房间布局画板' });
+    mockCanvasSize(canvas);
+    fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+    const room = await screen.findByRole('button', { name: '房间 1' });
+    fireEvent.click(await screen.findByRole('button', { name: '添加家具' }));
+
+    fireEvent.pointerDown(room, { button: 0, clientX: 360, clientY: 280, pointerId: 20 });
+    fireEvent.pointerMove(window, { clientX: 420, clientY: 320, pointerId: 20 });
+    fireEvent.pointerUp(window, { clientX: 420, clientY: 320, pointerId: 20 });
+
+    return {
+        room,
+        furniture: await screen.findByRole('button', { name: '家具 1' }),
+    };
+}
 
 function DialogHarness() {
     const [open, setOpen] = useState(false);
@@ -223,6 +255,238 @@ describe('room canvas keyboard interaction', () => {
         fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
         fireEvent.keyDown(window, { key: 'y', ctrlKey: true });
         expect(Number.parseFloat(room.style.left)).toBe(startLeft + 20);
+    });
+
+    it('creates furniture inside a room, clamps keyboard movement and restores it after reload', async () => {
+        render(<RoomCanvas gridSize={20} />);
+        const { room, furniture } = await createRoomWithFurniture();
+        const roomLeft = Number.parseFloat(room.style.left);
+        const roomWidth = Number.parseFloat(room.style.width);
+        const furnitureWidth = Number.parseFloat(furniture.style.width);
+
+        for (let index = 0; index < 10; index += 1) {
+            fireEvent.keyDown(furniture, { key: 'ArrowRight' });
+        }
+        expect(Number.parseFloat(furniture.style.left)).toBe(roomLeft + roomWidth - furnitureWidth);
+
+        await waitFor(() => {
+            const storedDocument = JSON.parse(window.localStorage.getItem(ROOM_CANVAS_STORAGE_KEY) ?? '{}') as {
+                furniture?: unknown[];
+            };
+            expect(storedDocument.furniture).toHaveLength(1);
+        });
+
+        cleanup();
+        render(<RoomCanvas gridSize={20} />);
+        expect(await screen.findByRole('button', { name: '家具 1' })).toBeInstanceOf(HTMLButtonElement);
+    });
+
+    it('searches furniture and confirms cascading room deletion as one undoable action', async () => {
+        render(<RoomCanvas gridSize={20} />);
+        const { room, furniture } = await createRoomWithFurniture();
+
+        fireEvent.click(screen.getByRole('button', { name: '搜索' }));
+        const input = screen.getByRole('searchbox', { name: '搜索画板内容' });
+        fireEvent.change(input, { target: { value: '家具 1' } });
+        fireEvent.click(screen.getByRole('button', { name: '定位到家具 1（家具）' }));
+        expect(furniture.dataset.highlighted).toBe('true');
+
+        fireEvent.keyDown(room, { key: 'Delete' });
+        const dialog = screen.getByRole('dialog', { name: '删除“房间 1”' });
+        expect(within(dialog).getByText('1 件家具')).toBeInstanceOf(HTMLLIElement);
+        fireEvent.click(screen.getByRole('button', { name: '确认删除' }));
+        expect(screen.queryByRole('button', { name: '房间 1' })).toBeNull();
+        expect(screen.queryByRole('button', { name: '家具 1' })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+        expect(screen.getByRole('button', { name: '房间 1' })).toBeInstanceOf(HTMLButtonElement);
+        expect(screen.getByRole('button', { name: '家具 1' })).toBeInstanceOf(HTMLButtonElement);
+    });
+
+    it('renames, transfers and deletes furniture from its detail workflow', async () => {
+        render(<RoomCanvas gridSize={20} />);
+        const { furniture } = await createRoomWithFurniture();
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+        const room2 = await screen.findByRole('button', { name: '房间 2' });
+
+        fireEvent.focus(furniture);
+        const roomSelect = await screen.findByLabelText('所属房间');
+        const room2Option = screen.getByRole<HTMLOptionElement>('option', { name: '房间 2' });
+        fireEvent.change(roomSelect, { target: { value: room2Option.value } });
+        await waitFor(() => {
+            const storedDocument = JSON.parse(window.localStorage.getItem(ROOM_CANVAS_STORAGE_KEY) ?? '{}') as {
+                furniture?: Array<{ roomId?: string }>;
+            };
+            expect(storedDocument.furniture?.[0]?.roomId).toBe(room2Option.value);
+        });
+
+        fireEvent.keyDown(furniture, { key: 'Enter' });
+        const nameInput = screen.getByLabelText('家具名称');
+        fireEvent.change(nameInput, { target: { value: '书柜' } });
+        fireEvent.keyDown(nameInput, { key: 'Enter' });
+        const renamedFurniture = await screen.findByRole('button', { name: '书柜' });
+        expect(Number.parseFloat(renamedFurniture.style.left)).toBeGreaterThanOrEqual(
+            Number.parseFloat(room2.style.left)
+        );
+
+        fireEvent.keyDown(renamedFurniture, { key: 'Delete' });
+        expect(screen.queryByRole('button', { name: '书柜' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+        expect(screen.getByRole('button', { name: '书柜' })).toBeInstanceOf(HTMLButtonElement);
+    });
+
+    it('creates, constrains, searches and restores a room storage device', async () => {
+        render(<RoomCanvas gridSize={20} />);
+        const canvas = screen.getByRole('region', { name: '房间布局画板' });
+        mockCanvasSize(canvas);
+        fireEvent.click(screen.getByRole('button', { name: '添加房间' }));
+        const room = await screen.findByRole('button', { name: '房间 1' });
+
+        fireEvent.click(screen.getByRole('button', { name: '添加储物设备' }));
+        fireEvent.pointerDown(room, { button: 0, clientX: 360, clientY: 280, pointerId: 30 });
+        fireEvent.pointerMove(window, { clientX: 400, clientY: 320, pointerId: 30 });
+        fireEvent.pointerUp(window, { clientX: 400, clientY: 320, pointerId: 30 });
+
+        const storageDevice = await screen.findByRole('button', { name: '储物设备 1' });
+        const roomLeft = Number.parseFloat(room.style.left);
+        const roomWidth = Number.parseFloat(room.style.width);
+        const storageWidth = Number.parseFloat(storageDevice.style.width);
+        for (let index = 0; index < 10; index += 1) {
+            fireEvent.keyDown(storageDevice, { key: 'ArrowRight' });
+        }
+        expect(Number.parseFloat(storageDevice.style.left)).toBe(roomLeft + roomWidth - storageWidth);
+
+        fireEvent.click(screen.getByRole('button', { name: '搜索' }));
+        const input = screen.getByRole('searchbox', { name: '搜索画板内容' });
+        fireEvent.change(input, { target: { value: '储物设备 1' } });
+        fireEvent.click(screen.getByRole('button', { name: '定位到储物设备 1（储物设备）' }));
+        expect(storageDevice.dataset.highlighted).toBe('true');
+
+        await waitFor(() => {
+            const storedDocument = JSON.parse(window.localStorage.getItem(ROOM_CANVAS_STORAGE_KEY) ?? '{}') as {
+                storageDevices?: unknown[];
+            };
+            expect(storedDocument.storageDevices).toHaveLength(1);
+        });
+
+        cleanup();
+        render(<RoomCanvas gridSize={20} />);
+        expect(await screen.findByRole('button', { name: '储物设备 1' })).toBeInstanceOf(HTMLButtonElement);
+    });
+
+    it('moves a storage device between furniture and rooms and restores cascading deletion', async () => {
+        render(<RoomCanvas gridSize={20} />);
+        const { room } = await createRoomWithFurniture();
+
+        fireEvent.click(screen.getByRole('button', { name: '添加储物设备' }));
+        expect(screen.queryByRole('button', { name: '储物设备 1' })).toBeNull();
+        const locationSelect = screen.getByLabelText('存放位置');
+        const roomOption = screen.getByRole<HTMLOptionElement>('option', { name: '房间 1（直接放置）' });
+        fireEvent.change(locationSelect, { target: { value: roomOption.value } });
+        expect(await screen.findByRole('button', { name: '储物设备 1' })).toBeInstanceOf(HTMLButtonElement);
+
+        const furnitureOption = screen.getByRole<HTMLOptionElement>('option', { name: '家具 1' });
+        fireEvent.change(locationSelect, { target: { value: furnitureOption.value } });
+        expect(screen.queryByRole('button', { name: '储物设备 1' })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: '重命名' }));
+        const nameInput = screen.getByLabelText('储物设备名称');
+        fireEvent.change(nameInput, { target: { value: '抽屉盒' } });
+        fireEvent.keyDown(nameInput, { key: 'Enter' });
+        expect(await screen.findByText('抽屉盒')).toBeInstanceOf(HTMLElement);
+
+        fireEvent.keyDown(room, { key: 'Delete' });
+        const dialog = screen.getByRole('dialog', { name: '删除“房间 1”' });
+        expect(within(dialog).getByText('1 件家具')).toBeInstanceOf(HTMLLIElement);
+        expect(within(dialog).getByText('1 个储物设备')).toBeInstanceOf(HTMLLIElement);
+        fireEvent.click(screen.getByRole('button', { name: '确认删除' }));
+        expect(screen.queryByRole('button', { name: '房间 1' })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+        expect(screen.getByRole('button', { name: '房间 1' })).toBeInstanceOf(HTMLButtonElement);
+        fireEvent.click(screen.getByRole('button', { name: '搜索' }));
+        fireEvent.change(screen.getByRole('searchbox', { name: '搜索画板内容' }), {
+            target: { value: '抽屉盒' },
+        });
+        expect(screen.getByRole('button', { name: '定位到抽屉盒（储物设备）' })).toBeInstanceOf(HTMLButtonElement);
+    });
+
+    it('adds, searches, moves, deletes and restores items across storage locations', async () => {
+        render(<RoomCanvas gridSize={20} />);
+        const { furniture } = await createRoomWithFurniture();
+
+        fireEvent.click(screen.getByRole('button', { name: '添加储物设备' }));
+        fireEvent.click(screen.getByRole('button', { name: '添加物品' }));
+        let itemDialog = screen.getByRole('dialog', { name: '添加物品' });
+        fireEvent.pointerDown(within(itemDialog).getByLabelText('物品名称'));
+        fireEvent.change(within(itemDialog).getByLabelText('物品名称'), { target: { value: '备用电池' } });
+        fireEvent.change(within(itemDialog).getByLabelText('数量'), { target: { value: '3' } });
+        fireEvent.click(within(itemDialog).getByRole('button', { name: '添加物品' }));
+
+        expect(await screen.findByText('备用电池')).toBeInstanceOf(HTMLElement);
+        expect(screen.getByRole('region', { name: '当前位置' })).toBeInstanceOf(HTMLElement);
+        expect(screen.getByText('数量 × 3')).toBeInstanceOf(HTMLElement);
+
+        fireEvent.click(screen.getByRole('button', { name: '搜索' }));
+        fireEvent.change(screen.getByRole('searchbox', { name: '搜索画板内容' }), {
+            target: { value: '备用电池' },
+        });
+        const result = screen.getByRole('button', { name: '定位到备用电池（物品）' });
+        expect(result.textContent).toContain('房间 1 / 家具 1 / 储物设备 1 / 物品');
+        fireEvent.click(result);
+        expect(screen.getByText('备用电池').closest('[data-highlighted="true"]')).not.toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: '编辑备用电池' }));
+        itemDialog = screen.getByRole('dialog', { name: '编辑物品' });
+        fireEvent.change(within(itemDialog).getByLabelText('数量'), { target: { value: '5' } });
+        const furnitureLocation = within(itemDialog).getByRole<HTMLOptionElement>('option', {
+            name: '房间 1 / 家具 1',
+        });
+        fireEvent.change(within(itemDialog).getByLabelText('存放位置'), {
+            target: { value: furnitureLocation.value },
+        });
+        fireEvent.click(within(itemDialog).getByRole('button', { name: '保存修改' }));
+
+        fireEvent.focus(furniture);
+        expect(await screen.findByText('数量 × 5')).toBeInstanceOf(HTMLElement);
+        fireEvent.click(screen.getByRole('button', { name: '删除备用电池' }));
+        expect(screen.queryByText('备用电池')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+        expect(await screen.findByText('备用电池')).toBeInstanceOf(HTMLElement);
+
+        await waitFor(() => {
+            const storedDocument = JSON.parse(window.localStorage.getItem(ROOM_CANVAS_STORAGE_KEY) ?? '{}') as {
+                items?: Array<{ name?: string; quantity?: number; location?: { kind?: string } }>;
+            };
+            expect(storedDocument.items?.[0]).toMatchObject({
+                name: '备用电池',
+                quantity: 5,
+                location: { kind: 'furniture' },
+            });
+        });
+
+        cleanup();
+        render(<RoomCanvas gridSize={20} />);
+        fireEvent.focus(await screen.findByRole('button', { name: '家具 1' }));
+        expect(await screen.findByText('备用电池')).toBeInstanceOf(HTMLElement);
+    });
+
+    it('shows entity-specific creation actions in context menus', async () => {
+        render(<RoomCanvas gridSize={20} />);
+        const { room, furniture } = await createRoomWithFurniture();
+
+        fireEvent.contextMenu(room, { clientX: 200, clientY: 200 });
+        let menu = await screen.findByRole('menu', { name: '房间操作' });
+        expect(within(menu).getByRole('menuitem', { name: '添加家具' })).toBeInstanceOf(HTMLButtonElement);
+        expect(within(menu).getByRole('menuitem', { name: '添加储物设备' })).toBeInstanceOf(HTMLButtonElement);
+        expect(within(menu).getByRole('menuitem', { name: '添加物品' })).toBeInstanceOf(HTMLButtonElement);
+        fireEvent.keyDown(menu, { key: 'Escape' });
+
+        fireEvent.contextMenu(furniture, { clientX: 240, clientY: 220 });
+        menu = await screen.findByRole('menu', { name: '家具操作' });
+        expect(within(menu).getByRole('menuitem', { name: '添加储物设备' })).toBeInstanceOf(HTMLButtonElement);
+        expect(within(menu).getByRole('menuitem', { name: '添加物品' })).toBeInstanceOf(HTMLButtonElement);
+        expect(within(menu).queryByRole('menuitem', { name: '添加家具' })).toBeNull();
     });
 
     it('does not start canvas interaction from toolbar pointer events', () => {

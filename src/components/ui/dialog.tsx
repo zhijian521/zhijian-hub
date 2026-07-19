@@ -30,6 +30,7 @@ interface DialogProps {
 export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps) {
     const panelRef = useRef<HTMLDivElement>(null);
     const titleId = useId();
+    const handlePointerDown = useCallback((event: React.PointerEvent) => event.stopPropagation(), []);
 
     /*-- 焦点陷阱：Tab / Shift+Tab 在面板内循环 --*/
     const handleKeyDown = useCallback(
@@ -89,7 +90,7 @@ export function Dialog({ open, title, onClose, children, maxWidth }: DialogProps
     if (!open) return null;
 
     return (
-        <div className={styles.overlay}>
+        <div className={styles.overlay} onPointerDown={handlePointerDown}>
             <div className={styles.backdrop} aria-hidden="true" onClick={onClose} />
             <div
                 aria-labelledby={titleId}

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeResizedRect, createRoom, MIN_ROOM_SIZE } from '@/lib/utils/room-canvas';
+import {
+    computeResizedRect,
+    createFurniture,
+    createFurnitureStorageDevice,
+    createItem,
+    createRoom,
+    createRoomStorageDevice,
+    fitRectWithinBounds,
+    MIN_ROOM_SIZE,
+} from '@/lib/utils/room-canvas';
 
 describe('room canvas utils', () => {
     it('creates a room with one stable sequence', () => {
@@ -13,6 +22,50 @@ describe('room canvas utils', () => {
             y: 40,
             width: 120,
             height: 80,
+        });
+    });
+
+    it('creates furniture with a stable parent and sequence', () => {
+        expect(createFurniture(3, 'room-1', { x: 20, y: 40, width: 80, height: 60 }, 1000)).toEqual({
+            id: 'furniture-1000-3',
+            roomId: 'room-1',
+            name: '家具 3',
+            x: 20,
+            y: 40,
+            width: 80,
+            height: 60,
+        });
+    });
+
+    it('creates room and furniture storage devices with only the required location data', () => {
+        expect(createRoomStorageDevice(2, 'room-1', { x: 20, y: 20, width: 80, height: 60 }, 1000)).toEqual({
+            id: 'storage-device-1000-2',
+            name: '储物设备 2',
+            location: { kind: 'room', roomId: 'room-1' },
+            rect: { x: 20, y: 20, width: 80, height: 60 },
+        });
+        expect(createFurnitureStorageDevice(3, 'furniture-1', 1000)).toEqual({
+            id: 'storage-device-1000-3',
+            name: '储物设备 3',
+            location: { kind: 'furniture', furnitureId: 'furniture-1' },
+        });
+    });
+
+    it('keeps furniture size and position inside its room', () => {
+        expect(fitRectWithinBounds({ x: -20, y: 80, width: 140, height: 60 }, { width: 120, height: 100 })).toEqual({
+            x: 0,
+            y: 40,
+            width: 120,
+            height: 60,
+        });
+    });
+
+    it('creates an item with its quantity and exact location', () => {
+        expect(createItem(4, '备用电池', 6, { kind: 'storage-device', storageDeviceId: 'storage-1' }, 1000)).toEqual({
+            id: 'item-1000-4',
+            name: '备用电池',
+            quantity: 6,
+            location: { kind: 'storage-device', storageDeviceId: 'storage-1' },
         });
     });
 

@@ -23,6 +23,8 @@ export interface ContextMenuItem {
     danger?: boolean;
     /*-- 是否禁用 --*/
     disabled?: boolean;
+    /*-- 可选图标，仅作视觉提示 --*/
+    icon?: React.ReactNode;
 }
 
 /*== 分隔线 ==*/
@@ -156,6 +158,9 @@ export function ContextMenu({ x, y, ariaLabel, items, onClose }: ContextMenuProp
                             onClose();
                         }}
                     >
+                        <span className={styles.itemIcon} aria-hidden="true">
+                            {entry.icon}
+                        </span>
                         {entry.label}
                     </button>
                 );

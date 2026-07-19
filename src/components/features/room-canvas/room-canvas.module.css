@@ -39,6 +39,11 @@
     cursor: grabbing;
 }
 
+.canvasChildDrawing,
+.canvasChildDrawing:active {
+    cursor: crosshair;
+}
+
 .canvasFocusing {
     transition:
         background-position 800ms cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -97,6 +102,13 @@
     z-index: 2;
 }
 
+.roomDrawingTarget {
+    border-style: dashed;
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 9%, transparent);
+    cursor: crosshair;
+}
+
 /*-- 定位高亮：独立于持续选中态，短暂提示目标位置 --*/
 .roomHighlighted::after {
     position: absolute;
@@ -111,14 +123,170 @@
 /*== 房间标签 ==*/
 .roomLabel {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: var(--text-sm);
+    top: var(--space-2);
+    left: var(--space-2);
+    max-width: calc(100% - var(--space-4));
+    overflow: hidden;
+    font-size: var(--text-xs);
     color: var(--foreground);
     pointer-events: none;
     user-select: none;
+    text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/*== 家具节点：温润木构块面，与房间边界保持层级差异 ==*/
+.furniture {
+    position: absolute;
+    box-sizing: border-box;
+    appearance: none;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--warning) 52%, var(--foreground));
+    border-radius: var(--radius-sm);
+    background:
+        linear-gradient(
+            90deg,
+            transparent 49%,
+            color-mix(in srgb, var(--warning) 14%, transparent) 50%,
+            transparent 51%
+        ),
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--warning) 20%, var(--muted)) 0%,
+            color-mix(in srgb, var(--warning) 32%, var(--border)) 100%
+        );
+    box-shadow:
+        inset 0 3px 0 color-mix(in srgb, var(--surface) 42%, transparent),
+        inset 0 -1px 0 color-mix(in srgb, var(--warning) 32%, transparent);
+    color: var(--foreground);
+    font: inherit;
+    cursor: move;
+    z-index: 3;
+}
+
+.furniture:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: var(--focus-offset);
+}
+
+.furnitureSelected {
+    border-color: var(--primary);
+    box-shadow:
+        inset 0 3px 0 color-mix(in srgb, var(--surface) 42%, transparent),
+        var(--shadow);
+    z-index: 4;
+}
+
+.furnitureDrawingMode {
+    cursor: crosshair;
+}
+
+.furnitureLabel {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    overflow: hidden;
+    color: var(--foreground);
+    font-size: var(--text-xs);
+    pointer-events: none;
+}
+
+.furnitureLabel svg {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: 0 0 auto;
+    color: color-mix(in srgb, var(--warning) 64%, var(--foreground));
+}
+
+.furnitureLabel span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.furnitureHighlighted::after {
+    position: absolute;
+    inset: -5px;
+    border-radius: calc(var(--radius-sm) + 4px);
+    box-shadow: 0 0 18px 7px color-mix(in srgb, var(--primary) 22%, transparent);
+    content: '';
+    pointer-events: none;
+    animation: roomHighlight 1.8s ease-out both;
+}
+
+/*== 储物设备节点：轻量收纳盒形态，与家具块面形成区分 ==*/
+.storageDevice {
+    position: absolute;
+    box-sizing: border-box;
+    appearance: none;
+    padding: 0;
+    border: 1px dashed color-mix(in srgb, var(--primary) 45%, var(--border));
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+    box-shadow: inset 0 3px 0 color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--foreground);
+    font: inherit;
+    cursor: move;
+    z-index: 5;
+}
+
+.storageDevice:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: var(--focus-offset);
+}
+
+.storageDeviceSelected {
+    border-style: solid;
+    border-color: var(--primary);
+    box-shadow:
+        inset 0 3px 0 color-mix(in srgb, var(--primary) 15%, transparent),
+        var(--shadow);
+    z-index: 6;
+}
+
+.storageDeviceDrawingMode {
+    cursor: crosshair;
+}
+
+.storageDeviceLabel {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    overflow: hidden;
+    color: var(--foreground);
+    font-size: var(--text-xs);
+    pointer-events: none;
+}
+
+.storageDeviceLabel svg {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: 0 0 auto;
+    color: var(--primary);
+}
+
+.storageDeviceLabel span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.storageDeviceHighlighted::after {
+    position: absolute;
+    inset: -5px;
+    border-radius: calc(var(--radius-sm) + 4px);
+    box-shadow: 0 0 18px 7px color-mix(in srgb, var(--primary) 22%, transparent);
+    content: '';
+    pointer-events: none;
+    animation: roomHighlight 1.8s ease-out both;
 }
 
 /*== 绘制预览 ==*/
@@ -130,6 +298,61 @@
     background: color-mix(in srgb, var(--primary) 8%, transparent);
     pointer-events: none;
     z-index: 3;
+}
+
+.furniturePreview {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--warning) 52%, var(--foreground));
+    background: color-mix(in srgb, var(--warning) 28%, var(--muted));
+}
+
+.storageDevicePreview {
+    border-width: 1px;
+    background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
+
+.drawingNotice {
+    position: absolute;
+    top: calc(var(--space-4) + var(--space-7));
+    left: 50%;
+    z-index: 18;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+    border-radius: var(--radius-lg);
+    background: var(--popover);
+    box-shadow: var(--shadow-sm);
+    color: var(--foreground);
+    font-size: var(--text-xs);
+    pointer-events: none;
+}
+
+.drawingNotice span {
+    color: var(--muted-foreground);
+}
+
+.deletionSummary p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+}
+
+.deletionSummary ul {
+    margin: var(--space-3) 0 0;
+    padding-left: var(--space-5);
+    color: var(--foreground);
+    font-size: var(--text-sm);
+}
+
+.dialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-5);
 }
 
 /*== 缩放手柄基础样式 ==*/
@@ -214,7 +437,9 @@
         transition: none;
     }
 
-    .roomHighlighted::after {
+    .roomHighlighted::after,
+    .furnitureHighlighted::after,
+    .storageDeviceHighlighted::after {
         opacity: 0.7;
         animation: none;
     }
