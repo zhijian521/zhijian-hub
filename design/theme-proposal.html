@@ -1,0 +1,1828 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>知简 Hub · 界面语言与主题方案</title>
+        <style>
+            /*============================================================================
+  页面外壳（中性，不参与主题）
+============================================================================*/
+            :root {
+                --radius-sm: 4px;
+                --radius: 6px;
+                --radius-lg: 10px;
+                --ui-serif: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
+                --ui-sans:
+                    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC',
+                    system-ui, sans-serif;
+                --ui-mono: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            html,
+            body {
+                margin: 0;
+            }
+
+            body {
+                background: #12100c;
+                color: #efe6d6;
+                font-family: var(--ui-sans);
+                font-size: 14px;
+                line-height: 1.6;
+                -webkit-font-smoothing: antialiased;
+            }
+
+            /*== 顶部导航 ==*/
+            .pagebar {
+                position: sticky;
+                top: 0;
+                z-index: 10;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 16px;
+                padding: 14px 28px;
+                background: rgba(18, 16, 12, 0.92);
+                border-bottom: 1px solid rgba(239, 230, 214, 0.12);
+                backdrop-filter: blur(12px);
+            }
+
+            .pagebrand {
+                display: flex;
+                align-items: baseline;
+                gap: 10px;
+                font-family: var(--ui-serif);
+                font-size: 17px;
+                letter-spacing: 0.04em;
+            }
+
+            .pagebrand small {
+                font-family: var(--ui-sans);
+                font-size: 11.5px;
+                letter-spacing: 0.08em;
+                color: rgba(239, 230, 214, 0.5);
+            }
+
+            .tabs {
+                display: flex;
+                gap: 6px;
+                margin-left: auto;
+                padding: 4px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.05);
+                box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+            }
+
+            .tab {
+                padding: 7px 16px;
+                border: 1px solid transparent;
+                border-radius: 999px;
+                background: transparent;
+                color: rgba(239, 230, 214, 0.72);
+                font: inherit;
+                font-size: 13px;
+                cursor: pointer;
+                transition:
+                    color 0.18s ease,
+                    background 0.18s ease,
+                    transform 0.16s cubic-bezier(0.34, 1.4, 0.64, 1);
+            }
+
+            .tab:hover {
+                color: #efe6d6;
+                background: rgba(255, 255, 255, 0.06);
+            }
+
+            .tab[aria-selected='true'] {
+                background: linear-gradient(180deg, #2b2419, #1d1811);
+                border-color: rgba(239, 230, 214, 0.22);
+                color: #f7efe0;
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+                    0 1px 3px rgba(0, 0, 0, 0.6);
+            }
+
+            /*== 通用规范区 ==*/
+            .intro {
+                max-width: 1180px;
+                margin: 0 auto;
+                padding: 40px 28px 8px;
+            }
+
+            .intro h1 {
+                margin: 0 0 6px;
+                font-family: var(--ui-serif);
+                font-size: 30px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+            }
+
+            .intro p.lead {
+                margin: 0 0 26px;
+                max-width: 62ch;
+                color: rgba(239, 230, 214, 0.62);
+                font-size: 13.5px;
+            }
+
+            .principles {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+                gap: 12px;
+                margin-bottom: 28px;
+            }
+
+            .principle {
+                padding: 14px 16px;
+                border: 1px solid rgba(239, 230, 214, 0.12);
+                border-radius: 10px;
+                background: rgba(255, 255, 255, 0.03);
+            }
+
+            .principle b {
+                display: block;
+                margin-bottom: 4px;
+                font-family: var(--ui-serif);
+                font-size: 14px;
+                font-weight: 600;
+            }
+
+            .principle span {
+                font-size: 12.5px;
+                color: rgba(239, 230, 214, 0.58);
+            }
+
+            .scales {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+                gap: 12px;
+                margin-bottom: 34px;
+            }
+
+            .scale {
+                padding: 14px 16px;
+                border: 1px solid rgba(239, 230, 214, 0.1);
+                border-radius: 10px;
+            }
+
+            .scale h4 {
+                margin: 0 0 10px;
+                font-size: 11.5px;
+                font-weight: 600;
+                letter-spacing: 0.14em;
+                color: rgba(239, 230, 214, 0.44);
+            }
+
+            .scale ul {
+                margin: 0;
+                padding: 0;
+                list-style: none;
+                font-size: 12.5px;
+                color: rgba(239, 230, 214, 0.72);
+            }
+
+            .scale li {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 3px 0;
+                border-bottom: 1px dashed rgba(239, 230, 214, 0.07);
+            }
+
+            .scale li:last-child {
+                border-bottom: none;
+            }
+
+            .scale code {
+                font-family: var(--ui-mono);
+                font-size: 11.5px;
+                color: rgba(239, 230, 214, 0.5);
+            }
+
+            /*== 四套主题同屏对照 ==*/
+            .compare {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 10px;
+                margin-bottom: 34px;
+            }
+
+            .compareCard {
+                padding: 11px;
+                border: 1px solid rgba(239, 230, 214, 0.12);
+                border-radius: 10px;
+                background: rgba(255, 255, 255, 0.03);
+                color: inherit;
+                font: inherit;
+                text-align: left;
+                cursor: pointer;
+                transition:
+                    border-color 0.18s ease,
+                    transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+            }
+
+            .compareCard:hover {
+                border-color: rgba(239, 230, 214, 0.34);
+                transform: translateY(-2px);
+            }
+
+            .compareCard .strip {
+                display: flex;
+                height: 36px;
+                margin-bottom: 9px;
+                border-radius: 6px;
+                overflow: hidden;
+                box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+            }
+
+            .compareCard .strip i {
+                display: block;
+            }
+
+            .compareCard b {
+                font-family: var(--ui-serif);
+                font-size: 13.5px;
+                font-weight: 600;
+            }
+
+            .compareCard span {
+                display: block;
+                margin-top: 2px;
+                font-size: 11px;
+                color: rgba(239, 230, 214, 0.5);
+            }
+
+            /*== 主题容器 ==*/
+            .stage {
+                max-width: 1180px;
+                margin: 0 auto;
+                padding: 8px 28px 72px;
+            }
+
+            .theme {
+                padding: 34px 34px 40px;
+                border-radius: 16px;
+                background: var(--bg0);
+                color: var(--fg0);
+                box-shadow:
+                    inset 0 1px 0 var(--hl),
+                    0 24px 60px rgba(0, 0, 0, 0.45);
+                animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+
+            @keyframes rise {
+                from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: none;
+                }
+            }
+
+            .themeHead {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 16px;
+                padding-bottom: 16px;
+                border-bottom: 1px solid var(--line1);
+            }
+
+            .themeHead h2 {
+                margin: 0;
+                font-family: var(--ui-serif);
+                font-size: 26px;
+                font-weight: 600;
+                letter-spacing: 0.03em;
+            }
+
+            .mood {
+                margin: 4px 0 0;
+                font-size: 13px;
+                color: var(--fg1);
+            }
+
+            .badge {
+                padding: 5px 12px;
+                border-radius: 999px;
+                background: var(--brand);
+                color: var(--onBrand);
+                font-size: 11.5px;
+                letter-spacing: 0.08em;
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+                    0 2px 6px color-mix(in srgb, var(--brand) 34%, transparent);
+            }
+
+            .ratio {
+                display: flex;
+                height: 26px;
+                margin: 18px 0 4px;
+                border-radius: 6px;
+                overflow: hidden;
+                box-shadow: inset 0 1px 3px var(--shDeep);
+                font-size: 10.5px;
+                letter-spacing: 0.06em;
+            }
+
+            .ratio span {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                white-space: nowrap;
+            }
+
+            .ratio .r1 {
+                background: var(--bg1);
+                color: var(--fg1);
+            }
+
+            .ratio .r2 {
+                background: var(--bg3);
+                color: var(--fg1);
+            }
+
+            .ratio .r3 {
+                background: var(--brand);
+                color: var(--onBrand);
+            }
+
+            .secTitle {
+                margin: 30px 0 12px;
+                font-size: 11.5px;
+                font-weight: 600;
+                letter-spacing: 0.16em;
+                color: var(--fg2);
+                text-transform: uppercase;
+            }
+
+            /*== 色板 ==*/
+            .palette {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+                gap: 10px;
+            }
+
+            .sw {
+                padding: 10px;
+                border: 1px solid var(--line1);
+                border-radius: 8px;
+                background: var(--bg1);
+            }
+
+            .chip {
+                display: block;
+                height: 38px;
+                margin-bottom: 8px;
+                border-radius: 5px;
+                box-shadow:
+                    inset 0 0 0 1px rgba(0, 0, 0, 0.08),
+                    inset 0 1px 0 var(--hl);
+            }
+
+            .sw b {
+                display: block;
+                font-size: 12px;
+                font-weight: 600;
+            }
+
+            .sw code {
+                display: block;
+                font-family: var(--ui-mono);
+                font-size: 10.5px;
+                color: var(--fg2);
+            }
+
+            .sw em {
+                display: block;
+                margin-top: 3px;
+                font-size: 11px;
+                font-style: normal;
+                color: var(--fg1);
+            }
+
+            /*== 字体阶梯 ==*/
+            .typo {
+                padding: 18px 20px;
+                border: 1px solid var(--line1);
+                border-radius: 10px;
+                background: var(--bg1);
+            }
+
+            .typoRow {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                gap: 20px;
+                padding: 9px 0;
+                border-bottom: 1px dashed var(--line1);
+            }
+
+            .typoRow:last-child {
+                border-bottom: none;
+            }
+
+            .typoRow span.sample {
+                font-family: var(--ui-serif);
+                letter-spacing: 0.02em;
+            }
+
+            .typoRow .meta {
+                flex: none;
+                font-family: var(--ui-mono);
+                font-size: 10.5px;
+                color: var(--fg2);
+            }
+
+            /*== 组件墙 ==*/
+            .compGrid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+                gap: 12px;
+            }
+
+            .card {
+                display: flex;
+                flex-direction: column;
+                padding: 16px;
+                border: 1px solid var(--line1);
+                border-radius: 10px;
+                background: var(--bg1);
+            }
+
+            .card > h5 {
+                margin: 0 0 14px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.12em;
+                color: var(--fg2);
+            }
+
+            .row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .row + .row {
+                margin-top: 10px;
+            }
+
+            /*-- 按钮：上高光、下内阴影、按下位移 --*/
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                height: 32px;
+                padding: 0 15px;
+                border: 1px solid var(--line2);
+                border-radius: var(--radius);
+                background: linear-gradient(
+                    180deg,
+                    color-mix(in srgb, var(--bg2) 94%, #fff 6%),
+                    var(--bg2)
+                );
+                color: var(--fg0);
+                font: inherit;
+                font-size: 12.5px;
+                cursor: pointer;
+                box-shadow:
+                    inset 0 1px 0 var(--hl),
+                    inset 0 -1px 0 var(--sh),
+                    0 1px 2px var(--sh);
+                transition:
+                    transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1),
+                    box-shadow 0.12s ease,
+                    background 0.2s ease;
+            }
+
+            .btn:hover {
+                background: linear-gradient(
+                    180deg,
+                    color-mix(in srgb, var(--bg2) 88%, #fff 12%),
+                    var(--bg2)
+                );
+            }
+
+            .btn:active {
+                transform: translateY(1px);
+                box-shadow:
+                    inset 0 2px 3px var(--shDeep),
+                    inset 0 -1px 0 transparent,
+                    0 0 0 transparent;
+            }
+
+            .btn--primary {
+                border-color: color-mix(in srgb, var(--brand) 72%, #000);
+                background: linear-gradient(180deg, var(--brandHover), var(--brand));
+                color: var(--onBrand);
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+                    inset 0 -2px 0 rgba(0, 0, 0, 0.16),
+                    0 2px 7px color-mix(in srgb, var(--brand) 30%, transparent);
+            }
+
+            .btn--primary:hover {
+                background: linear-gradient(
+                    180deg,
+                    color-mix(in srgb, var(--brandHover) 86%, #fff 14%),
+                    var(--brandHover)
+                );
+            }
+
+            .btn--danger {
+                border-color: color-mix(in srgb, var(--danger) 56%, var(--line2));
+                color: var(--danger);
+                background: linear-gradient(
+                    180deg,
+                    color-mix(in srgb, var(--danger) 7%, var(--bg2)),
+                    var(--bg2)
+                );
+            }
+
+            .btn--ghost {
+                border-color: transparent;
+                background: transparent;
+                box-shadow: none;
+                color: var(--fg1);
+            }
+
+            .btn--ghost:hover {
+                background: var(--bg3);
+                color: var(--fg0);
+            }
+
+            .btn[disabled] {
+                opacity: 0.45;
+                pointer-events: none;
+            }
+
+            .iconBtn {
+                width: 32px;
+                height: 32px;
+                padding: 0;
+                font-size: 14px;
+            }
+
+            /*-- 两格开关：轨道凹槽 + 带位移回弹的胶囊 --*/
+            .switch {
+                position: relative;
+                width: 48px;
+                height: 26px;
+                padding: 0;
+                border: 1px solid var(--line2);
+                border-radius: 999px;
+                background: var(--bg3);
+                cursor: pointer;
+                box-shadow:
+                    inset 0 2px 4px var(--shDeep),
+                    inset 0 -1px 0 var(--hl);
+            }
+
+            .switch i {
+                position: absolute;
+                top: 2px;
+                left: 2px;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--bg2) 92%, #fff));
+                box-shadow:
+                    0 2px 4px var(--shDeep),
+                    inset 0 -1px 0 var(--sh);
+                transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+
+            .switch[data-on='true'] {
+                background: color-mix(in srgb, var(--brand) 22%, var(--bg3));
+                border-color: color-mix(in srgb, var(--brand) 38%, var(--line2));
+            }
+
+            .switch[data-on='true'] i {
+                transform: translateX(22px);
+            }
+
+            /*-- 分段控件：同一凹槽里做位移 --*/
+            .segmented {
+                display: inline-flex;
+                gap: 3px;
+                padding: 3px;
+                border-radius: 8px;
+                background: var(--bg3);
+                box-shadow:
+                    inset 0 2px 3px var(--shDeep),
+                    inset 0 -1px 0 var(--hl);
+            }
+
+            .segmented button {
+                padding: 6px 14px;
+                border: 1px solid transparent;
+                border-radius: 6px;
+                background: transparent;
+                color: var(--fg1);
+                font: inherit;
+                font-size: 12.5px;
+                cursor: pointer;
+                transition:
+                    background 0.18s ease,
+                    color 0.18s ease,
+                    box-shadow 0.18s ease;
+            }
+
+            .segmented button[aria-pressed='true'] {
+                background: linear-gradient(
+                    180deg,
+                    color-mix(in srgb, var(--bg2) 92%, #fff 8%),
+                    var(--bg2)
+                );
+                border-color: var(--line2);
+                color: var(--fg0);
+                box-shadow:
+                    inset 0 1px 0 var(--hl),
+                    0 1px 2px var(--sh);
+            }
+
+            /*-- 输入：整体下沉的凹槽 --*/
+            .field {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+                height: 32px;
+                padding: 0 11px;
+                border: 1px solid var(--line1);
+                border-radius: var(--radius);
+                background: var(--bg3);
+                color: var(--fg1);
+                font-size: 12.5px;
+                box-shadow:
+                    inset 0 2px 3px var(--shDeep),
+                    inset 0 -1px 0 var(--hl);
+            }
+
+            .field b {
+                color: var(--fg2);
+                font-weight: 400;
+            }
+
+            .caret {
+                display: inline-block;
+                width: 1px;
+                height: 13px;
+                background: var(--brand);
+                animation: blink 1.1s steps(2, start) infinite;
+            }
+
+            @keyframes blink {
+                50% {
+                    opacity: 0;
+                }
+            }
+
+            /*-- 标签与徽标 --*/
+            .tag {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 3px 9px;
+                border: 1px solid var(--line1);
+                border-radius: 999px;
+                background: var(--bg2);
+                color: var(--fg1);
+                font-size: 11.5px;
+                box-shadow: inset 0 1px 0 var(--hl);
+            }
+
+            .tag--brand {
+                border-color: color-mix(in srgb, var(--brand) 30%, var(--line1));
+                background: var(--brandSoft);
+                color: var(--brand);
+            }
+
+            .tag--accent {
+                border-color: color-mix(in srgb, var(--accent) 30%, var(--line1));
+                background: color-mix(in srgb, var(--accent) 10%, transparent);
+                color: var(--accent);
+            }
+
+            .count {
+                min-width: 20px;
+                padding: 1px 6px;
+                border-radius: 999px;
+                background: var(--bg3);
+                color: var(--fg1);
+                font-family: var(--ui-mono);
+                font-size: 10.5px;
+                text-align: center;
+                box-shadow: inset 0 1px 2px var(--shDeep);
+            }
+
+            .count--brand {
+                background: var(--brand);
+                color: var(--onBrand);
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            }
+
+            /*-- 列表项 --*/
+            .listItem {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                width: 100%;
+                padding: 9px 10px;
+                border: 1px solid transparent;
+                border-radius: 7px;
+                background: transparent;
+                color: var(--fg0);
+                font: inherit;
+                text-align: left;
+                cursor: pointer;
+                transition:
+                    background 0.16s ease,
+                    border-color 0.16s ease;
+            }
+
+            .listItem + .listItem {
+                margin-top: 4px;
+            }
+
+            .listItem:hover {
+                background: var(--bg3);
+            }
+
+            .listItem[aria-current='true'] {
+                border-color: color-mix(in srgb, var(--brand) 32%, transparent);
+                background: var(--brandSoft);
+            }
+
+            .listItem .glyph {
+                display: grid;
+                place-items: center;
+                width: 26px;
+                height: 26px;
+                flex: none;
+                border-radius: 6px;
+                background: var(--bg3);
+                color: var(--fg1);
+                font-size: 12px;
+                box-shadow: inset 0 1px 0 var(--hl);
+            }
+
+            .listItem .txt {
+                display: flex;
+                flex-direction: column;
+                gap: 1px;
+                min-width: 0;
+            }
+
+            .listItem .txt b {
+                font-size: 12.5px;
+                font-weight: 500;
+            }
+
+            .listItem .txt span {
+                font-size: 11px;
+                color: var(--fg2);
+            }
+
+            /*-- 右键菜单 --*/
+            .menu {
+                width: 168px;
+                padding: 5px;
+                border: 1px solid var(--line2);
+                border-radius: 9px;
+                background: var(--bg2);
+                box-shadow:
+                    inset 0 1px 0 var(--hl),
+                    0 10px 26px rgba(0, 0, 0, 0.24);
+            }
+
+            .menu button {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+                padding: 7px 9px;
+                border: none;
+                border-radius: 6px;
+                background: transparent;
+                color: var(--fg0);
+                font: inherit;
+                font-size: 12.5px;
+                text-align: left;
+                cursor: pointer;
+            }
+
+            .menu button:hover {
+                background: var(--brandSoft);
+                color: var(--brand);
+            }
+
+            .menu button.danger {
+                color: var(--danger);
+            }
+
+            .menu button.danger:hover {
+                background: color-mix(in srgb, var(--danger) 10%, transparent);
+            }
+
+            .menu hr {
+                margin: 5px 6px;
+                border: none;
+                border-top: 1px solid var(--line1);
+            }
+
+            /*-- 对话框 --*/
+            .dialog {
+                width: 100%;
+                padding: 16px 18px 14px;
+                border: 1px solid var(--line2);
+                border-radius: 10px;
+                background: var(--bg2);
+                box-shadow:
+                    inset 0 1px 0 var(--hl),
+                    0 14px 34px rgba(0, 0, 0, 0.26);
+            }
+
+            .dialog h6 {
+                margin: 0 0 6px;
+                font-family: var(--ui-serif);
+                font-size: 15px;
+                font-weight: 600;
+            }
+
+            .dialog p {
+                margin: 0 0 12px;
+                font-size: 12px;
+                color: var(--fg1);
+            }
+
+            .dialog ul {
+                margin: 0 0 14px;
+                padding-left: 18px;
+                font-size: 12px;
+                color: var(--fg1);
+            }
+
+            .dialogActions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 8px;
+            }
+
+            /*-- 空状态 --*/
+            .empty {
+                display: flex;
+                flex: 1;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                padding: 20px 12px;
+                border: 1px dashed var(--line2);
+                border-radius: 9px;
+                color: var(--fg2);
+                font-size: 12px;
+                text-align: center;
+            }
+
+            .empty b {
+                font-family: var(--ui-serif);
+                font-size: 13.5px;
+                font-weight: 500;
+                color: var(--fg1);
+            }
+
+            /*== 画布 + 详情 ==*/
+            .sceneRow {
+                display: grid;
+                grid-template-columns: 1fr 296px;
+                gap: 12px;
+            }
+
+            @media (max-width: 900px) {
+                .sceneRow {
+                    grid-template-columns: 1fr;
+                }
+            }
+
+            .scene {
+                position: relative;
+                height: 404px;
+                overflow: hidden;
+                border: 1px solid var(--line1);
+                border-radius: 10px;
+                background-color: var(--bg1);
+                background-image: radial-gradient(circle, var(--line2) 1px, transparent 1px);
+                background-size: 20px 20px;
+            }
+
+            /*-- 顶部工具栏浮层 --*/
+            .toolbar {
+                position: absolute;
+                top: 14px;
+                left: 50%;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                padding: 4px;
+                transform: translateX(-50%);
+                border: 1px solid var(--line2);
+                border-radius: 9px;
+                background: var(--bg2);
+                box-shadow:
+                    inset 0 1px 0 var(--hl),
+                    0 6px 18px rgba(0, 0, 0, 0.16);
+            }
+
+            .toolbar i {
+                display: grid;
+                place-items: center;
+                width: 28px;
+                height: 26px;
+                border-radius: 6px;
+                color: var(--fg1);
+                font-size: 12px;
+                font-style: normal;
+            }
+
+            .toolbar i.on {
+                background: var(--brand);
+                color: var(--onBrand);
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+                    0 1px 3px color-mix(in srgb, var(--brand) 32%, transparent);
+            }
+
+            .toolbar u {
+                width: 1px;
+                height: 16px;
+                margin: 0 3px;
+                background: var(--line1);
+            }
+
+            .toolbar em {
+                padding: 0 8px;
+                font-size: 11px;
+                font-style: normal;
+                color: var(--fg2);
+            }
+
+            /*-- 缩放控件 --*/
+            .zoom {
+                position: absolute;
+                right: 14px;
+                bottom: 14px;
+                display: flex;
+                align-items: center;
+                gap: 2px;
+                padding: 4px;
+                border: 1px solid var(--line2);
+                border-radius: 8px;
+                background: var(--bg2);
+                box-shadow:
+                    inset 0 1px 0 var(--hl),
+                    0 4px 12px rgba(0, 0, 0, 0.14);
+                font-size: 11.5px;
+                color: var(--fg1);
+            }
+
+            .zoom span {
+                display: grid;
+                place-items: center;
+                width: 22px;
+                height: 22px;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+
+            .zoom span:hover {
+                background: var(--bg3);
+            }
+
+            .zoom b {
+                min-width: 40px;
+                font-family: var(--ui-mono);
+                font-size: 11px;
+                font-weight: 400;
+                text-align: center;
+            }
+
+            /*-- 房间 / 家具 / 储物设备 --*/
+            .room {
+                position: absolute;
+                border: 1px solid var(--roomLine);
+                border-radius: var(--radius-sm);
+                background: var(--roomFill);
+            }
+
+            .room > .name {
+                position: absolute;
+                top: 7px;
+                left: 12px;
+                /* 与主色混合正文色：亮色主题变深、暗色主题自动提亮，一套写法通吃两种底色 */
+                color: color-mix(in srgb, var(--brand) 72%, var(--fg0));
+                font-size: 11px;
+                letter-spacing: 0.06em;
+            }
+
+            .room.sel {
+                border-color: var(--brand);
+                box-shadow:
+                    0 0 0 2px color-mix(in srgb, var(--brand) 16%, transparent),
+                    0 3px 10px color-mix(in srgb, var(--brand) 12%, transparent);
+            }
+
+            .furn {
+                position: absolute;
+                display: grid;
+                place-items: center;
+                border: 1px solid var(--furLine);
+                border-radius: var(--radius-sm);
+                background: var(--furFill);
+                color: var(--furText);
+                font-size: 10.5px;
+                overflow: hidden;
+            }
+
+            .sto {
+                position: absolute;
+                display: grid;
+                place-items: center;
+                border: 1px dashed var(--stoLine);
+                border-radius: var(--radius-sm);
+                background: var(--stoFill);
+                color: var(--stoText);
+                font-size: 10.5px;
+                overflow: hidden;
+            }
+
+            /* 角标挂在块外右上角：块内空间本来就窄，放里面必然压字 */
+            .badgeCount {
+                position: absolute;
+                top: -7px;
+                right: -7px;
+                min-width: 16px;
+                padding: 0 5px;
+                border-radius: 999px;
+                background: var(--brand);
+                color: var(--onBrand);
+                font-family: var(--ui-mono);
+                font-size: 9.5px;
+                line-height: 16px;
+                text-align: center;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+            }
+
+            /*-- 八方向手柄 --*/
+            .handle {
+                position: absolute;
+                width: 7px;
+                height: 7px;
+                border: 1px solid var(--brand);
+                border-radius: 1px;
+                background: var(--bg2);
+            }
+
+            .h-nw {
+                top: -4px;
+                left: -4px;
+            }
+            .h-n {
+                top: -4px;
+                left: calc(50% - 3px);
+            }
+            .h-ne {
+                top: -4px;
+                right: -4px;
+            }
+            .h-e {
+                top: calc(50% - 3px);
+                right: -4px;
+            }
+            .h-se {
+                right: -4px;
+                bottom: -4px;
+            }
+            .h-s {
+                bottom: -4px;
+                left: calc(50% - 3px);
+            }
+            .h-sw {
+                bottom: -4px;
+                left: -4px;
+            }
+            .h-w {
+                top: calc(50% - 3px);
+                left: -4px;
+            }
+
+            /*-- 右侧详情 --*/
+            .detail {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                height: 404px;
+                padding: 14px;
+                overflow: hidden;
+                border: 1px solid var(--line1);
+                border-radius: 10px;
+                background: var(--bg1);
+            }
+
+            .detail .path {
+                font-size: 10.5px;
+                letter-spacing: 0.04em;
+                color: var(--fg2);
+            }
+
+            .detail h6 {
+                margin: 0;
+                font-family: var(--ui-serif);
+                font-size: 15px;
+                font-weight: 600;
+            }
+
+            .detail .meta {
+                font-size: 11px;
+                color: var(--fg2);
+            }
+
+            .detail .actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .detail .actions .btn {
+                height: 26px;
+                padding: 0 10px;
+                font-size: 11.5px;
+            }
+
+            .detail .sec {
+                font-size: 10.5px;
+                letter-spacing: 0.12em;
+                color: var(--fg2);
+            }
+
+            .detail hr {
+                margin: 0;
+                border: none;
+                border-top: 1px solid var(--line1);
+            }
+
+            .note {
+                margin: 26px 0 0;
+                padding: 12px 14px;
+                border-left: 2px solid var(--brand);
+                background: var(--brandSoft);
+                border-radius: 0 8px 8px 0;
+                font-size: 12.5px;
+                color: var(--fg1);
+            }
+
+            .note b {
+                color: var(--fg0);
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                * {
+                    animation-duration: 0.01ms !important;
+                    transition-duration: 0.01ms !important;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <header class="pagebar">
+            <div class="pagebrand">
+                知简 Hub
+                <small>界面语言提案 · 2026-11-09</small>
+            </div>
+            <nav class="tabs" id="tabs" aria-label="主题切换"></nav>
+        </header>
+
+        <section class="intro">
+            <h1>一套组件几何，四套材质与色彩</h1>
+            <p class="lead">
+                桌面应用的信息密度和触感需求与网页不同：控件要能读出厚度，状态要靠光影而不是描边。下面四套主题共用同一套几何、
+                间距、字号与动效节奏，只有色板和材质强度不同——选定后组件代码不需要重写，只需替换 CSS
+                变量。
+            </p>
+
+            <div class="principles">
+                <div class="principle">
+                    <b>实体感优先于扁平</b>
+                    <span>
+                        按钮、开关、输入框都有明确的凸起或凹陷：顶部高光、底部内阴影、按下位移 1px。
+                    </span>
+                </div>
+                <div class="principle">
+                    <b>主色只做决定</b>
+                    <span>
+                        朱砂类主色只出现在主操作、选中态与关键数字，占画面不超过 10%，多了就失焦。
+                    </span>
+                </div>
+                <div class="principle">
+                    <b>空间对象靠材质区分</b>
+                    <span>
+                        房间是线框，家具是实心木色，储物设备是虚线淡色——不靠颜色编码，靠质感编码。
+                    </span>
+                </div>
+                <div class="principle">
+                    <b>动效短促且有回弹</b>
+                    <span>
+                        悬停 180ms、按压 120ms、位移用带回弹的曲线，面板切换 340ms，不做装饰性动画。
+                    </span>
+                </div>
+            </div>
+
+            <div class="scales">
+                <div class="scale">
+                    <h4>间距刻度</h4>
+                    <ul>
+                        <li>
+                            <span>紧凑内距</span>
+                            <code>4 / 8</code>
+                        </li>
+                        <li>
+                            <span>常规内距</span>
+                            <code>12 / 16</code>
+                        </li>
+                        <li>
+                            <span>分区间距</span>
+                            <code>24 / 32</code>
+                        </li>
+                        <li>
+                            <span>区块间距</span>
+                            <code>48 / 64</code>
+                        </li>
+                    </ul>
+                </div>
+                <div class="scale">
+                    <h4>圆角语义</h4>
+                    <ul>
+                        <li>
+                            <span>空间对象</span>
+                            <code>4px</code>
+                        </li>
+                        <li>
+                            <span>按钮与输入</span>
+                            <code>6px</code>
+                        </li>
+                        <li>
+                            <span>工具栏与浮层</span>
+                            <code>10px</code>
+                        </li>
+                        <li>
+                            <span>胶囊与开关</span>
+                            <code>999px</code>
+                        </li>
+                    </ul>
+                </div>
+                <div class="scale">
+                    <h4>字号阶梯（桌面密度）</h4>
+                    <ul>
+                        <li>
+                            <span>界面标题</span>
+                            <code>26 / 600</code>
+                        </li>
+                        <li>
+                            <span>区块标题</span>
+                            <code>15 / 600</code>
+                        </li>
+                        <li>
+                            <span>正文与按钮</span>
+                            <code>12.5</code>
+                        </li>
+                        <li>
+                            <span>辅助说明</span>
+                            <code>11 / 10.5</code>
+                        </li>
+                    </ul>
+                </div>
+                <div class="scale">
+                    <h4>动效节奏</h4>
+                    <ul>
+                        <li>
+                            <span>按压回弹</span>
+                            <code>120ms spring</code>
+                        </li>
+                        <li>
+                            <span>悬停过渡</span>
+                            <code>180ms ease</code>
+                        </li>
+                        <li>
+                            <span>开关位移</span>
+                            <code>260ms spring</code>
+                        </li>
+                        <li>
+                            <span>面板进场</span>
+                            <code>340ms ease-out</code>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <h4
+                style="
+                    margin: 0 0 10px;
+                    font-size: 11.5px;
+                    letter-spacing: 0.14em;
+                    color: rgba(239, 230, 214, 0.44);
+                    font-weight: 600;
+                "
+            >
+                同屏对照 · 点击切换
+            </h4>
+            <div class="compare" id="compare"></div>
+        </section>
+
+        <main class="stage" id="stage"></main>
+
+        <script>
+            /*============================================================================
+  主题数据：唯一来源，色板与样式变量由同一份对象派生
+============================================================================*/
+            const THEMES = [
+                {
+                    id: 'paper',
+                    name: '宣纸 · 朱砂',
+                    badge: '推荐',
+                    mood: '素纸打底，朱印点睛。与「知简」的文人气味一脉相承，长时间看不累。',
+                    note: '<b>适用判断：</b>这是四套里最稳妥的一套。亮色背景配朱砂主色，家具用木色实心、储物设备用淡朱砂虚线，三层空间关系一眼可分。缺点是对屏幕偏蓝、环境光很强的场景，白纸底会略显刺眼。',
+                    vars: {
+                        bg0: '#f6f1e8',
+                        bg1: '#fffcf6',
+                        bg2: '#ffffff',
+                        bg3: '#ece3d5',
+                        fg0: '#241f1a',
+                        fg1: '#5f574c',
+                        fg2: '#958a79',
+                        line1: '#e2d7c5',
+                        line2: '#cbba9f',
+                        brand: '#9f000f',
+                        brandHover: '#b81a26',
+                        brandSoft: 'rgba(159, 0, 15, 0.07)',
+                        onBrand: '#fff8f2',
+                        accent: '#4a5d23',
+                        danger: '#b0201f',
+                        roomFill: 'rgba(159, 0, 15, 0.045)',
+                        roomLine: 'rgba(159, 0, 15, 0.30)',
+                        furFill: '#e7d8be',
+                        furLine: '#c2a97f',
+                        furText: '#6a5330',
+                        stoFill: 'rgba(159, 0, 15, 0.09)',
+                        stoLine: 'rgba(159, 0, 15, 0.42)',
+                        stoText: '#8a1020',
+                        hl: 'rgba(255, 255, 255, 0.9)',
+                        sh: 'rgba(90, 70, 45, 0.07)',
+                        shDeep: 'rgba(90, 70, 45, 0.18)',
+                    },
+                    swatches: [
+                        ['素纸底', 'bg0', '页面背景'],
+                        ['纸面', 'bg1', '卡片与面板'],
+                        ['纯白浮层', 'bg2', '菜单与弹窗'],
+                        ['凹槽', 'bg3', '输入与轨道'],
+                        ['墨色', 'fg0', '正文'],
+                        ['淡墨', 'fg2', '辅助文字'],
+                        ['朱砂', 'brand', '主操作 / 选中'],
+                        ['竹青', 'accent', '次强调'],
+                        ['木色', 'furFill', '家具块面'],
+                        ['危险', 'danger', '删除类操作'],
+                    ],
+                },
+                {
+                    id: 'ink',
+                    name: '墨夜 · 朱砂',
+                    badge: '',
+                    mood: '夜读场景的墨底朱批。朱砂在暗底上提亮，木色转为暖褐，长时间夜间使用不刺眼。',
+                    note: '<b>适用判断：</b>适合晚上整理物品、或显示器亮度不高的环境。代价是暗色下家具与房间的层次更依赖明度差，需要把家具提亮一档、房间线框加粗一点；截图和演示时也不如亮色讨喜。',
+                    vars: {
+                        bg0: '#14110d',
+                        bg1: '#1c1813',
+                        bg2: '#241f17',
+                        bg3: '#0e0c09',
+                        fg0: '#f2e9d8',
+                        fg1: '#b8a98f',
+                        fg2: '#7f7362',
+                        line1: 'rgba(240, 225, 200, 0.10)',
+                        line2: 'rgba(240, 225, 200, 0.20)',
+                        brand: '#c8323c',
+                        brandHover: '#e04a52',
+                        brandSoft: 'rgba(200, 50, 60, 0.16)',
+                        onBrand: '#fff6f0',
+                        accent: '#b08b4f',
+                        danger: '#e05a52',
+                        roomFill: 'rgba(200, 50, 60, 0.10)',
+                        roomLine: 'rgba(200, 50, 60, 0.48)',
+                        furFill: '#3b2f21',
+                        furLine: '#5c472c',
+                        furText: '#ecd7b2',
+                        stoFill: 'rgba(176, 139, 79, 0.22)',
+                        stoLine: 'rgba(176, 139, 79, 0.62)',
+                        stoText: '#f0d8ad',
+                        hl: 'rgba(255, 255, 255, 0.10)',
+                        sh: 'rgba(0, 0, 0, 0.45)',
+                        shDeep: 'rgba(0, 0, 0, 0.70)',
+                    },
+                    swatches: [
+                        ['墨底', 'bg0', '页面背景'],
+                        ['墨面', 'bg1', '卡片与面板'],
+                        ['浮层', 'bg2', '菜单与弹窗'],
+                        ['深槽', 'bg3', '输入与轨道'],
+                        ['月白', 'fg0', '正文'],
+                        ['暗金', 'accent', '次强调'],
+                        ['朱砂提亮', 'brand', '主操作 / 选中'],
+                        ['暖褐', 'furFill', '家具块面'],
+                        ['烬红', 'danger', '删除类操作'],
+                        ['描边', 'line2', '分隔与边框'],
+                    ],
+                },
+                {
+                    id: 'moss',
+                    name: '苔痕 · 竹青',
+                    badge: '',
+                    mood: '雨后石阶的苔绿。主色换成竹青，朱砂退成警示色，整体更冷静、更「收纳工具」。',
+                    note: '<b>适用判断：</b>如果希望这个应用看起来像工具而不是文具，这套最合适——绿色主色天然带有「整理、归档」的暗示，红色只在删除时出现，警示性更强。风险是与市面上大量绿色效率工具撞色。',
+                    vars: {
+                        bg0: '#f1f4ea',
+                        bg1: '#fbfdf6',
+                        bg2: '#ffffff',
+                        bg3: '#e5ebd8',
+                        fg0: '#1f2419',
+                        fg1: '#4f5745',
+                        fg2: '#858d75',
+                        line1: '#d9e0c9',
+                        line2: '#bfcaab',
+                        brand: '#3f5a2a',
+                        brandHover: '#4f6f34',
+                        brandSoft: 'rgba(63, 90, 42, 0.09)',
+                        onBrand: '#fbfdf5',
+                        accent: '#8a5a2b',
+                        danger: '#b03a2e',
+                        roomFill: 'rgba(63, 90, 42, 0.05)',
+                        roomLine: 'rgba(63, 90, 42, 0.32)',
+                        furFill: '#e8dcbf',
+                        furLine: '#c4ab7f',
+                        furText: '#6a5330',
+                        stoFill: 'rgba(138, 90, 43, 0.12)',
+                        stoLine: 'rgba(138, 90, 43, 0.46)',
+                        stoText: '#7c4e23',
+                        hl: 'rgba(255, 255, 255, 0.9)',
+                        sh: 'rgba(40, 55, 25, 0.07)',
+                        shDeep: 'rgba(40, 55, 25, 0.18)',
+                    },
+                    swatches: [
+                        ['苔底', 'bg0', '页面背景'],
+                        ['苔面', 'bg1', '卡片与面板'],
+                        ['浮层', 'bg2', '菜单与弹窗'],
+                        ['凹槽', 'bg3', '输入与轨道'],
+                        ['松墨', 'fg0', '正文'],
+                        ['苔灰', 'fg2', '辅助文字'],
+                        ['竹青', 'brand', '主操作 / 选中'],
+                        ['赭石', 'accent', '次强调'],
+                        ['木色', 'furFill', '家具块面'],
+                        ['警示', 'danger', '删除类操作'],
+                    ],
+                },
+                {
+                    id: 'sandal',
+                    name: '檀木 · 赭石',
+                    badge: '',
+                    mood: '旧家具的暖调。赭石主色配更深一档的纸黄底，最接近「家里的木头和陶器」。',
+                    note: '<b>适用判断：</b>四套里最暖、最生活化的一套，和家居主题最贴。代价是底色偏黄偏暖，若未来接图片缩略图会显得画面发闷；对色准要求高的场景不建议。',
+                    vars: {
+                        bg0: '#f1e6d6',
+                        bg1: '#faf1e3',
+                        bg2: '#fff9ef',
+                        bg3: '#e5d6c0',
+                        fg0: '#2a1e15',
+                        fg1: '#5f4a38',
+                        fg2: '#907861',
+                        line1: '#dbc9b1',
+                        line2: '#c2a684',
+                        brand: '#8c3b1e',
+                        brandHover: '#a54a28',
+                        brandSoft: 'rgba(140, 59, 30, 0.10)',
+                        onBrand: '#fff8ee',
+                        accent: '#3f5d5a',
+                        danger: '#a33a26',
+                        roomFill: 'rgba(140, 59, 30, 0.05)',
+                        roomLine: 'rgba(140, 59, 30, 0.32)',
+                        furFill: '#dfc7a2',
+                        furLine: '#b9996c',
+                        furText: '#5f4626',
+                        stoFill: 'rgba(63, 93, 90, 0.13)',
+                        stoLine: 'rgba(63, 93, 90, 0.46)',
+                        stoText: '#35534f',
+                        hl: 'rgba(255, 255, 255, 0.86)',
+                        sh: 'rgba(85, 55, 25, 0.10)',
+                        shDeep: 'rgba(85, 55, 25, 0.22)',
+                    },
+                    swatches: [
+                        ['麻纸底', 'bg0', '页面背景'],
+                        ['纸面', 'bg1', '卡片与面板'],
+                        ['浮层', 'bg2', '菜单与弹窗'],
+                        ['凹槽', 'bg3', '输入与轨道'],
+                        ['深褐', 'fg0', '正文'],
+                        ['陶灰', 'fg2', '辅助文字'],
+                        ['赭石', 'brand', '主操作 / 选中'],
+                        ['青灰', 'accent', '次强调'],
+                        ['木色', 'furFill', '家具块面'],
+                        ['警示', 'danger', '删除类操作'],
+                    ],
+                },
+            ];
+
+            /*== 组件墙：四套主题复用同一份结构 ==*/
+            function renderComponents() {
+                return `
+        <div class="compGrid">
+          <div class="card">
+            <h5>按钮</h5>
+            <div class="row">
+              <button class="btn btn--primary">添加房间</button>
+              <button class="btn">重命名</button>
+              <button class="btn btn--danger">删除</button>
+            </div>
+            <div class="row">
+              <button class="btn btn--ghost">取消</button>
+              <button class="btn iconBtn" aria-label="撤销">↶</button>
+              <button class="btn" disabled>不可用</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5>开关与分段</h5>
+            <div class="row">
+              <button class="switch" data-on="true" aria-label="网格吸附"><i></i></button>
+              <span style="font-size:12px;color:var(--fg1)">网格吸附</span>
+              <button class="switch" data-on="false" aria-label="显示物品数量"><i></i></button>
+              <span style="font-size:12px;color:var(--fg1)">显示数量</span>
+            </div>
+            <div class="row">
+              <div class="segmented">
+                <button aria-pressed="true">房间</button>
+                <button aria-pressed="false">家具</button>
+                <button aria-pressed="false">储物</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5>输入</h5>
+            <div class="row"><label class="field"><b>⌕</b>搜索房间、家具、物品<span class="caret"></span></label></div>
+            <div class="row">
+              <label class="field" style="width:auto;flex:1">房间名称</label>
+              <button class="btn">保存</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5>标签与计数</h5>
+            <div class="row">
+              <span class="tag tag--brand">已选中</span>
+              <span class="tag tag--accent">家具</span>
+              <span class="tag">储物设备</span>
+              <span class="count">12</span>
+              <span class="count count--brand">3</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5>列表项</h5>
+            <button class="listItem" aria-current="true">
+              <span class="glyph">间</span>
+              <span class="txt"><b>主卧</b><span>4 件家具 · 2 个储物设备</span></span>
+            </button>
+            <button class="listItem">
+              <span class="glyph">柜</span>
+              <span class="txt"><b>衣柜</b><span>主卧 / 衣柜 / 3 件物品</span></span>
+            </button>
+          </div>
+
+          <div class="card">
+            <h5>右键菜单</h5>
+            <div class="menu">
+              <button>添加家具</button>
+              <button>添加储物设备</button>
+              <button>添加物品</button>
+              <hr />
+              <button>修改名称</button>
+              <button class="danger">删除房间</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5>对话框</h5>
+            <div class="dialog">
+              <h6>删除「主卧」</h6>
+              <p>该操作将同时删除以下内容，并作为一次操作进入撤销历史：</p>
+              <ul><li>4 件家具</li><li>2 个储物设备</li><li>9 项物品记录</li></ul>
+              <div class="dialogActions">
+                <button class="btn">取消</button>
+                <button class="btn btn--danger">确认删除</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h5>空状态</h5>
+            <div class="empty">
+              <b>画布还是空的</b>
+              <span>从「添加房间」开始布置你的家</span>
+            </div>
+          </div>
+        </div>`;
+            }
+
+            /*== 画布与详情 ==*/
+            function renderScene() {
+                return `
+        <div class="sceneRow">
+          <div class="scene">
+            <div class="toolbar">
+              <i>↖</i><i class="on">□</i><i>＋</i><i>⟲</i><i>⟳</i>
+              <u></u><em>空</em>
+            </div>
+
+            <div class="room sel" style="left:62px;top:66px;width:250px;height:168px">
+              <span class="name">客厅</span>
+              <div class="furn" style="left:20px;top:24px;width:104px;height:40px">电视柜 <span class="badgeCount">3</span></div>
+              <div class="furn" style="left:20px;top:78px;width:60px;height:56px">边几</div>
+              <div class="sto" style="left:150px;top:98px;width:74px;height:52px">收纳筐 <span class="badgeCount">6</span></div>
+              <span class="handle h-nw"></span><span class="handle h-n"></span><span class="handle h-ne"></span>
+              <span class="handle h-e"></span><span class="handle h-se"></span><span class="handle h-s"></span>
+              <span class="handle h-sw"></span><span class="handle h-w"></span>
+            </div>
+
+            <div class="room" style="left:344px;top:54px;width:154px;height:132px">
+              <span class="name">厨房</span>
+              <div class="sto" style="left:30px;top:38px;width:76px;height:56px">调料架 <span class="badgeCount">12</span></div>
+            </div>
+
+            <div class="room" style="left:150px;top:262px;width:232px;height:94px">
+              <span class="name">主卧</span>
+              <div class="furn" style="left:24px;top:26px;width:88px;height:46px">衣柜 <span class="badgeCount">21</span></div>
+            </div>
+
+            <div class="zoom"><span>−</span><b>100%</b><span>＋</span></div>
+          </div>
+
+          <aside class="detail">
+            <span class="path">主卧</span>
+            <h6>衣柜</h6>
+            <span class="meta">4.3 × 2.3 格 · 3 个储物设备 · 21 件物品</span>
+            <div class="actions">
+              <button class="btn btn--primary">添加储物设备</button>
+              <button class="btn">添加物品</button>
+            </div>
+            <hr />
+            <span class="sec">家具内储物设备</span>
+            <button class="listItem" aria-current="true">
+              <span class="glyph">匣</span>
+              <span class="txt"><b>左侧抽屉</b><span>8 件物品</span></span>
+            </button>
+            <button class="listItem">
+              <span class="glyph">匣</span>
+              <span class="txt"><b>顶部收纳盒</b><span>5 件物品</span></span>
+            </button>
+            <hr />
+            <span class="sec">直接放在这里的物品</span>
+            <button class="listItem">
+              <span class="glyph">物</span>
+              <span class="txt"><b>备用电池</b><span>数量 8</span></span>
+            </button>
+          </aside>
+        </div>`;
+            }
+
+            /*== 单个主题 ==*/
+            function renderTheme(theme) {
+                const style = Object.entries(theme.vars)
+                    .map(([key, value]) => `--${key}:${value}`)
+                    .join(';');
+
+                const palette = theme.swatches
+                    .map(
+                        ([label, key, role]) => `
+              <div class="sw">
+                <span class="chip" style="background:${theme.vars[key]}"></span>
+                <b>${label}</b>
+                <code>${theme.vars[key]}</code>
+                <em>${role}</em>
+              </div>`,
+                    )
+                    .join('');
+
+                return `
+        <section class="theme" style="${style}">
+          <header class="themeHead">
+            <div>
+              <h2>${theme.name}</h2>
+              <p class="mood">${theme.mood}</p>
+            </div>
+            ${theme.badge ? `<span class="badge">${theme.badge}</span>` : ''}
+          </header>
+
+          <div class="ratio" aria-hidden="true">
+            <span class="r1" style="flex:6">背景 60%</span>
+            <span class="r2" style="flex:3">表面与凹槽 30%</span>
+            <span class="r3" style="flex:1">主色 10%</span>
+          </div>
+
+          <h3 class="secTitle">色板</h3>
+          <div class="palette">${palette}</div>
+
+          <h3 class="secTitle">字体阶梯</h3>
+          <div class="typo">
+            <div class="typoRow">
+              <span class="sample" style="font-size:26px;font-weight:600">知简 Hub · 家庭储物</span>
+              <span class="meta">26 / 600 / 衬线</span>
+            </div>
+            <div class="typoRow">
+              <span class="sample" style="font-size:15px;font-weight:600">家具内储物设备</span>
+              <span class="meta">15 / 600 / 衬线</span>
+            </div>
+            <div class="typoRow">
+              <span style="font-size:12.5px">正文与按钮字号：客厅 / 电视柜 / 保鲜袋，共 3 个储物设备。</span>
+              <span class="meta">12.5 / 400 / 无衬线</span>
+            </div>
+            <div class="typoRow">
+              <span style="font-size:11px;color:var(--fg2)">辅助说明：数据存于本机 · SQLite</span>
+              <span class="meta">11 / 400 / 无衬线</span>
+            </div>
+            <div class="typoRow">
+              <span style="font-family:var(--ui-mono);font-size:15px;font-variant-numeric:tabular-nums">128 · 4.5 格 · 21</span>
+              <span class="meta">数字等宽，避免跳动</span>
+            </div>
+          </div>
+
+          <h3 class="secTitle">组件语言</h3>
+          ${renderComponents()}
+
+          <h3 class="secTitle">画布与详情面板</h3>
+          ${renderScene()}
+
+          <p class="note">${theme.note}</p>
+        </section>`;
+            }
+
+            /*== 导航与挂载 ==*/
+            const tabs = document.getElementById('tabs');
+            const stage = document.getElementById('stage');
+
+            tabs.innerHTML = THEMES.map(
+                (theme, index) => `
+        <button class="tab" role="tab" aria-selected="${index === 0}" data-id="${theme.id}">${theme.name}</button>`,
+            ).join('');
+
+            /*== 同屏对照：底色 / 凹槽 / 主色 / 家具色的比例条 ==*/
+            const compare = document.getElementById('compare');
+            compare.innerHTML = THEMES.map(
+                (theme) => `
+        <button class="compareCard" data-id="${theme.id}" type="button">
+          <span class="strip">
+            <i style="flex:7;background:${theme.vars.bg0}"></i>
+            <i style="flex:3;background:${theme.vars.bg3}"></i>
+            <i style="flex:2;background:${theme.vars.brand}"></i>
+            <i style="flex:2;background:${theme.vars.furFill}"></i>
+          </span>
+          <b>${theme.name}</b>
+          <span>主色 ${theme.vars.brand} · 家具 ${theme.vars.furFill}</span>
+        </button>`,
+            ).join('');
+
+            compare.addEventListener('click', (event) => {
+                const card = event.target.closest('.compareCard');
+                if (card) show(card.dataset.id);
+            });
+
+            function show(themeId) {
+                const theme = THEMES.find((item) => item.id === themeId) ?? THEMES[0];
+                stage.innerHTML = renderTheme(theme);
+                for (const tab of tabs.querySelectorAll('.tab')) {
+                    tab.setAttribute('aria-selected', String(tab.dataset.id === theme.id));
+                }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            tabs.addEventListener('click', (event) => {
+                const button = event.target.closest('.tab');
+                if (button) show(button.dataset.id);
+            });
+
+            show(THEMES[0].id);
+        </script>
+    </body>
+</html>
