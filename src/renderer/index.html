@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!-- 渲染层不需要任何外部资源，全量锁死 CSP，减少注入面。 -->
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://127.0.0.1:5178"
+        />
+        <title>知简 Hub</title>
+    </head>
+    <body>
+        <div id="app"></div>
+        <script type="module" src="/main.ts"></script>
+    </body>
+</html>

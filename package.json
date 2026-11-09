@@ -1,0 +1,50 @@
+{
+    "name": "zhijian-hub",
+    "productName": "知简 Hub",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "src/main/main.cjs",
+    "description": "知简 Hub — 以空间位置、容器层级和全局搜索为核心的家庭储物管理桌面应用",
+    "author": "zhijian",
+    "license": "UNLICENSED",
+    "engines": {
+        "node": ">=22.12.0"
+    },
+    "scripts": {
+        "dev": "node scripts/dev.mjs",
+        "dev:web": "vite",
+        "build": "vite build",
+        "start": "node scripts/start.mjs",
+        "preview": "vite preview --host 127.0.0.1 --port 5180 --strictPort",
+        "smoke": "npm run build && node scripts/smoke.mjs",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "typecheck": "vue-tsc --noEmit",
+        "test": "node --test \"tests/**/*.test.mjs\"",
+        "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+        "dist:dir": "npm run build && electron-builder --dir --config electron-builder.config.cjs",
+        "dist": "npm run build && electron-builder --win --config electron-builder.config.cjs"
+    },
+    "dependencies": {
+        "pinia": "^3.0.4",
+        "vue": "^3.5.24"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.39.5",
+        "@types/node": "^24.0.0",
+        "@vitejs/plugin-vue": "^6.0.10",
+        "electron": "^38.0.0",
+        "electron-builder": "^26.0.0",
+        "eslint": "^9.39.5",
+        "eslint-plugin-vue": "^10.12.0",
+        "globals": "^15.15.0",
+        "prettier": "3.6.2",
+        "typescript": "~5.9.3",
+        "typescript-eslint": "^8.46.0",
+        "vite": "^7.0.0",
+        "vue-tsc": "^3.0.0"
+    }
+}

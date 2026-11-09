@@ -1,0 +1,69 @@
+/*============================================================================
+  theme — 中国风简约亮色主题
+
+  文人书斋 · 水墨宣纸 · 温润雅致
+  朱砂红主色，素净背景，留白呼吸感强
+  只含亮色主题；暗色模式等有明确需求时再作为新主题加入
+============================================================================*/
+
+:root {
+    /*== 主色 · 朱砂红 ==*/
+    --primary: #9f000f;
+    --primary-foreground: #ffffff;
+    --primary-hover: #c41e3a;
+    --primary-active: #7a000b;
+
+    /*== 副主色 · 竹青 ==*/
+    --secondary: #4a5d23;
+    --secondary-foreground: #ffffff;
+
+    /*== 语义色 ==*/
+    --success: #4f7942;
+    --warning: #d48a2a;
+    --info: #3a6794;
+    --destructive: #ba1a1a;
+    --destructive-foreground: #ffffff;
+
+    /*== 文字色 ==*/
+    --foreground: #1d1b20; /* 墨色 */
+    --muted-foreground: #756e65; /* 淡墨，满足普通文本 AA 对比度 */
+
+    /*== 背景色 ==*/
+    --background: #fbf9f9; /* 宣纸白 */
+    --surface: #ffffff;
+    --muted: #f6efe7;
+    --highlight: #faf7f4;
+
+    /*== 边框色 ==*/
+    --border: #e7ddd1;
+    --border-strong: #d4c5b3;
+
+    /*== 浮层色 ==*/
+    --popover: #ffffff;
+    --overlay: rgba(45, 40, 35, 0.4);
+
+    /*== 阴影 ==*/
+    --shadow-sm: 0 1px 2px rgba(45, 40, 35, 0.08);
+    --shadow: 0 4px 16px rgba(45, 40, 35, 0.12);
+    --shadow-lg: 0 12px 48px rgba(45, 40, 35, 0.16);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+
+    /*== 字体家族 ==*/
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'Georgia', serif;
+    --font-sans:
+        'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui,
+        sans-serif;
+    --font-mono: 'SF Mono', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+
+    /*== 空间对象色板 ==*/
+    --room-fill: rgba(159, 0, 15, 0.04);
+    --room-stroke: color-mix(in srgb, var(--primary) 38%, transparent);
+    --furniture-fill: #e8dcc8; /* 温润木色 */
+    --furniture-stroke: #bda98b;
+    --storage-fill: rgba(159, 0, 15, 0.1); /* 淡朱砂收纳盒 */
+    --storage-stroke: color-mix(in srgb, var(--primary) 55%, transparent);
+
+    /*== 过渡 ==*/
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: 0.15s ease;
+}

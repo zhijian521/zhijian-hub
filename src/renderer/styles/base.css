@@ -1,0 +1,60 @@
+@import './tokens.css';
+@import './theme.css';
+
+/*============================================================================
+  base — 全局重置与基础排版
+
+  只做重置和最小排版，布局一律交给组件自身的 scoped 样式。
+  导入顺序固定 tokens → theme，theme 可引用 token。
+============================================================================*/
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    color: var(--foreground);
+    background: var(--background);
+    -webkit-font-smoothing: antialiased;
+    /* 桌面应用不需要整页滚动，滚动一律发生在具体面板内部。 */
+    overflow: hidden;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+input,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+/* 系统开启「减少动态效果」后，压缩所有过渡，避免眩晕。 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
