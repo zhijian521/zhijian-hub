@@ -10,7 +10,7 @@
 | -------- | ----------------------------------------- | ----------------------------------------- |
 | 运行时   | Electron 38.8.6（内置 Node 22.22）        | 主进程 CJS，预加载脚本 CJS                |
 | 渲染层   | Vue 3.5 + Vite 7                          | `src/renderer` 为独立 Vite 根             |
-| 状态     | Pinia 3                                   | 按功能建 store，不建全局大对象            |
+| 状态     | Pinia 3                                   | 已接入，按功能建 store，不建全局大对象    |
 | 语言     | TypeScript 5.9 严格模式                   | `vue-tsc --noEmit` 做类型门禁             |
 | 数据     | SQLite（`node:sqlite`）                   | 零原生模块，无需 MSVC 工具链              |
 | 样式     | CSS 变量 + scoped 样式                    | `tokens.css` 只放刻度，`theme.css` 放颜色 |
@@ -30,14 +30,28 @@ src/
 ├── preload/               # contextBridge 暴露具名方法
 │   └── preload.cjs
 └── renderer/              # Vue 应用（Vite 根）
-    ├── App.vue            # 应用外壳：品牌栏 / 工作区 / 状态栏
+    ├── App.vue            # 自绘标题栏 + 全幅画板
     ├── app/types.ts       # 与主进程的契约
-    ├── stores/app.ts      # 应用级状态（版本、主进程连通性）
     └── styles/            # tokens / theme / base
 tests/                     # node:test 用例
+design/                    # 界面语言与主题提案（theme-proposal.html）
 ```
 
 依赖方向固定：`renderer → preload → main`，不反向依赖。渲染层拿不到 `ipcRenderer`，只能调用 preload 白名单里的具名方法；每个通道在主进程侧再校验调用者是否为当前主窗口主 frame。
+
+## 窗口与标题栏
+
+窗口以 `frame: false` 启动，系统边框与 min / max / close 全部关闭，改由 `App.vue` 自绘：
+
+- 标题栏高 `--titlebar-height`（40px），整条声明 `-webkit-app-region: drag`，按钮区 `no-drag`；Windows 下的双击最大化、贴边缩放由 `thickFrame` 保留。
+- 三个按钮通过 `zhijian:windowControl` 回调主进程，`zhijian:windowState` 查询当前最大化状态，最大化 / 还原后主进程推送 `zhijian:windowStateChanged` 让图标切换。
+- 关闭走 `window.close()` 而不是销毁，保留 `close` 与 `pagehide` 钩子，便于以后接「退出前保存」。
+
+## 主题
+
+当前主题为 **苔痕 · 竹青**：竹青 `#3f5a2a` 作主色，赭石 `#8a5a2b` 作次强调，朱红 `#b03a2e` 只用于危险操作。全部颜色集中在 `src/renderer/styles/theme.css`，`tokens.css` 只放刻度（间距、字号、圆角、标题栏高度、网格尺寸）。
+
+另外三套候选主题（宣纸·朱砂 / 墨夜·朱砂 / 檀木·赭石）保留在 `design/theme-proposal.html`，可直接在浏览器里打开对比，将来要做暗色模式或换肤时从这里取色。
 
 ## 命令
 

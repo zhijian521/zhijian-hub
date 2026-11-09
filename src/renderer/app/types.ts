@@ -11,8 +11,19 @@ export interface AppInfo {
     platform: string;
 }
 
+export type WindowAction = 'minimize' | 'toggle-maximize' | 'close';
+
+export interface WindowState {
+    maximized: boolean;
+}
+
 export interface DesktopBridge {
     appInfo: () => Promise<AppInfo>;
+    /*-- 执行窗口操作，返回操作后的最大化状态 --*/
+    windowControl: (action: WindowAction) => Promise<WindowState>;
+    getWindowState: () => Promise<WindowState>;
+    /*-- 订阅最大化状态变化，返回取消订阅函数 --*/
+    onWindowStateChanged: (listener: (state: WindowState) => void) => () => void;
 }
 
 declare global {

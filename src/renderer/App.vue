@@ -1,216 +1,213 @@
 <script setup lang="ts">
 /*============================================================================
-  App — 应用外壳
+  App — 自绘标题栏 + 全幅画板
 
-  只搭骨架：顶部品牌栏、中央工作区、底部状态栏。
-  工作区当前是空画布，用于承接后续功能，不放任何业务节点。
-  主进程连通性通过底栏状态体现，证明「渲染层 ↔ preload ↔ IPC」链路可用。
+  窗口去掉系统边框（main.cjs 中 frame: false），最小化 / 最大化 / 关闭
+  由这里的三个按钮通过 IPC 回调主进程执行。
+
+  主页只有画板：除标题栏外不放任何常驻面板，画布铺满剩余空间，
+  后续的房间、家具、储物设备都直接落在这层点阵上。
 ============================================================================*/
 
-import { computed, onMounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 
-import { useAppStore } from '@/stores/app';
+import type { WindowAction } from '@/app/types';
 
-const store = useAppStore();
+const maximized = ref(false);
+let unsubscribe: (() => void) | undefined;
 
-onMounted(() => {
-    void store.connect();
+onMounted(async () => {
+    const bridge = window.zhijian;
+    if (!bridge) return;
+
+    const state = await bridge.getWindowState();
+    maximized.value = state.maximized;
+    unsubscribe = bridge.onWindowStateChanged((next) => {
+        maximized.value = next.maximized;
+    });
 });
 
-const bridgeText = computed(() => {
-    if (store.status === 'connecting') return '正在连接主进程';
-    if (store.status === 'error') return store.errorMessage || '主进程未连接';
-    return '主进程已连接';
+onUnmounted(() => {
+    unsubscribe?.();
 });
+
+async function control(action: WindowAction) {
+    const bridge = window.zhijian;
+    if (!bridge) return;
+    const state = await bridge.windowControl(action);
+    maximized.value = state.maximized;
+}
 </script>
 
 <template>
     <div class="app">
-        <!--== 顶部品牌栏 ==-->
-        <header class="topbar">
-            <div class="brand">
-                <span class="seal" aria-hidden="true">简</span>
-                <span class="brandText">
-                    <strong>知简 Hub</strong>
-                    <span>家庭储物 · 位置与层级</span>
-                </span>
-            </div>
+        <!--== 自绘标题栏：整条可拖拽，按钮区域排除 ==-->
+        <header class="titlebar">
+            <span class="seal" aria-hidden="true">简</span>
+            <h1 class="title">知简 Hub</h1>
 
-            <div class="trailing">
-                <span class="tag">桌面端</span>
-                <span class="version">
-                    {{ store.info ? `v${store.info.version}` : '—' }}
-                </span>
+            <div class="windowControls">
+                <button
+                    class="control"
+                    type="button"
+                    aria-label="最小化"
+                    title="最小化"
+                    @click="control('minimize')"
+                >
+                    <svg viewBox="0 0 12 12" aria-hidden="true">
+                        <path d="M3 6h6" />
+                    </svg>
+                </button>
+
+                <button
+                    class="control"
+                    type="button"
+                    :aria-label="maximized ? '还原' : '最大化'"
+                    :title="maximized ? '还原' : '最大化'"
+                    @click="control('toggle-maximize')"
+                >
+                    <svg v-if="maximized" viewBox="0 0 12 12" aria-hidden="true">
+                        <rect x="2.5" y="4" width="5.5" height="5.5" rx="1" />
+                        <path
+                            d="M4.5 4V3.2A1.2 1.2 0 0 1 5.7 2h3.1a1.2 1.2 0 0 1 1.2 1.2v3.1a1.2 1.2 0 0 1-1.2 1.2H8"
+                        />
+                    </svg>
+                    <svg v-else viewBox="0 0 12 12" aria-hidden="true">
+                        <rect x="3" y="3" width="6" height="6" rx="1" />
+                    </svg>
+                </button>
+
+                <button
+                    class="control controlClose"
+                    type="button"
+                    aria-label="关闭"
+                    title="关闭"
+                    @click="control('close')"
+                >
+                    <svg viewBox="0 0 12 12" aria-hidden="true">
+                        <path d="M3.5 3.5l5 5M8.5 3.5l-5 5" />
+                    </svg>
+                </button>
             </div>
         </header>
 
-        <!--== 工作区 ==-->
-        <main class="workspace" role="main" aria-label="工作区">
-            <div class="placeholder">
-                <p class="placeholderTitle">工作区待接入</p>
-                <p class="placeholderHint">布局、画布与数据能力按里程碑逐步接入</p>
-            </div>
-        </main>
-
-        <!--== 状态栏 ==-->
-        <footer class="statusbar">
-            <span>{{ store.info?.name ?? '知简 Hub' }}</span>
-            <span class="bridge" :data-status="store.status">
-                <i class="dot" aria-hidden="true"></i>
-                {{ bridgeText }}
-            </span>
-        </footer>
+        <!--== 画板：点阵底，铺满剩余空间 ==-->
+        <main class="board" role="main" aria-label="画板"></main>
     </div>
 </template>
 
 <style scoped>
 .app {
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: var(--titlebar-height) 1fr;
     height: 100%;
-    background: var(--background);
+    background: var(--bg);
 }
 
-/*== 顶部品牌栏 ==*/
-.topbar {
+/*== 标题栏 ==*/
+.titlebar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-    padding: var(--space-3) var(--space-5);
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    gap: var(--space-2);
+    padding: 0 6px 0 12px;
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--surface) 94%, #fff 6%),
+        var(--surface)
+    );
+    border-bottom: 1px solid var(--line);
+    box-shadow: inset 0 1px 0 var(--hi);
+    /* 整条标题栏可拖拽窗口；系统默认边框已关闭 */
+    -webkit-app-region: drag;
 }
 
-.brand {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-}
-
-/* 印章式标识：朱砂实底 + 白字，靠色块立住，不用描边 */
+/* 印章式标识：实底小方块，靠色块立住，不用描边 */
 .seal {
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
-    border-radius: var(--radius-sm);
-    background: var(--primary);
-    color: var(--primary-foreground);
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    background: var(--brand);
+    color: var(--on-brand);
     font-family: var(--font-serif);
-    font-size: var(--text-lg);
+    font-size: 11px;
     line-height: 1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
-.brandText {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.brandText strong {
+.title {
+    margin: 0;
     font-family: var(--font-serif);
-    font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
-    letter-spacing: 0.02em;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0.04em;
+    color: var(--fg-muted);
 }
 
-.brandText span {
-    font-size: var(--text-xs);
-    color: var(--muted-foreground);
-}
-
-.trailing {
+/*== 窗口按钮 ==*/
+.windowControls {
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
+    gap: 2px;
+    margin-left: auto;
+    /* 拖拽区里按钮必须显式排除，否则点不动 */
+    -webkit-app-region: no-drag;
 }
 
-.tag {
-    padding: 2px var(--space-2);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    font-size: var(--text-xs);
-    color: var(--muted-foreground);
+.control {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--fg-muted);
+    transition:
+        background var(--transition),
+        color var(--transition),
+        transform var(--transition-fast);
 }
 
-.version {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    font-variant-numeric: tabular-nums;
-    color: var(--muted-foreground);
+.control svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.2;
+    stroke-linecap: round;
 }
 
-/*== 工作区 ==*/
-.workspace {
+.control:hover {
+    background: var(--sunken);
+    color: var(--fg);
+}
+
+.control:active {
+    transform: translateY(1px);
+}
+
+/* 关闭键用危险色实底：这是界面上唯一一处「红」，语义明确 */
+.controlClose:hover {
+    border-color: color-mix(in srgb, var(--danger) 72%, #000);
+    background: var(--danger);
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/*== 画板 ==*/
+.board {
     position: relative;
     overflow: hidden;
-    /* 点阵底纹先占住画布的视觉基调，后续画布直接叠在上面 */
-    background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
-    background-size: 20px 20px;
+    background-color: var(--bg);
+    /* 点阵压到 72% 不透明度：整屏满铺时，实色点会显得吵 */
+    background-image: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--line) 72%, transparent) 1px,
+        transparent 1px
+    );
+    background-size: var(--grid-size) var(--grid-size);
     background-position: -1px -1px;
-}
-
-.placeholder {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    margin: 0;
-    pointer-events: none;
-}
-
-.placeholderTitle {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-size: var(--text-xl);
-    letter-spacing: 0.08em;
-    color: var(--muted-foreground);
-}
-
-.placeholderHint {
-    margin: 0;
-    font-size: var(--text-sm);
-    color: color-mix(in srgb, var(--muted-foreground) 72%, transparent);
-}
-
-/*== 状态栏 ==*/
-.statusbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-2) var(--space-5);
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-    font-size: var(--text-xs);
-    color: var(--muted-foreground);
-}
-
-.bridge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-}
-
-.dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--muted-foreground);
-}
-
-.bridge[data-status='ready'] .dot {
-    background: var(--success);
-}
-
-.bridge[data-status='error'] .dot {
-    background: var(--destructive);
-}
-
-.bridge[data-status='error'] {
-    color: var(--destructive);
 }
 </style>

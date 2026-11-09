@@ -3,12 +3,18 @@
 
   渲染进程只能通过 preload 暴露的白名单方法访问这里。
   每个入口都先确认调用方是主窗口主 frame，再执行具体逻辑。
-  当前只有应用信息一个通道；后续数据通道按同样形态追加。
 ============================================================================*/
 
 const CHANNELS = {
     appInfo: 'zhijian:appInfo',
+    windowControl: 'zhijian:windowControl',
+    windowState: 'zhijian:windowState',
 };
+
+/** 窗口状态推送通道：最大化 / 还原后通知渲染层换图标 */
+const WINDOW_STATE_EVENT = 'zhijian:windowStateChanged';
+
+const WINDOW_ACTIONS = new Set(['minimize', 'toggle-maximize', 'close']);
 
 /**
  * @param {{
@@ -37,6 +43,34 @@ function registerIpc({ ipcMain, app, getWindow }) {
         assertTrusted(event);
         return { name: app.getName(), version: app.getVersion(), platform: process.platform };
     });
+
+    /*
+     * 自绘标题栏的窗口按钮。关闭用 close 而不是 destroy：
+     * close 会照常走 close 事件与 pagehide，方便以后接"退出前保存"。
+     */
+    ipcMain.handle(CHANNELS.windowControl, (event, action) => {
+        assertTrusted(event);
+        const window = getWindow();
+        if (!window) return { maximized: false };
+        if (!WINDOW_ACTIONS.has(action)) throw new Error(`未知的窗口操作：${String(action)}`);
+
+        if (action === 'minimize') window.minimize();
+        else if (action === 'toggle-maximize') {
+            if (window.isMaximized()) window.unmaximize();
+            else window.maximize();
+        } else {
+            window.close();
+            // 关闭后窗口可能已销毁，状态不再有意义，返回当前值即可。
+        }
+
+        return { maximized: window.isDestroyed() ? false : window.isMaximized() };
+    });
+
+    ipcMain.handle(CHANNELS.windowState, (event) => {
+        assertTrusted(event);
+        const window = getWindow();
+        return { maximized: Boolean(window && !window.isDestroyed() && window.isMaximized()) };
+    });
 }
 
-module.exports = { CHANNELS, registerIpc };
+module.exports = { CHANNELS, WINDOW_STATE_EVENT, registerIpc };

@@ -11,6 +11,19 @@ const { contextBridge, ipcRenderer } = require('electron');
  */
 const api = {
     appInfo: () => ipcRenderer.invoke('zhijian:appInfo'),
+
+    /** @param {'minimize' | 'toggle-maximize' | 'close'} action */
+    windowControl: (action) => ipcRenderer.invoke('zhijian:windowControl', action),
+
+    getWindowState: () => ipcRenderer.invoke('zhijian:windowState'),
+
+    /** @param {(state: { maximized: boolean }) => void} listener */
+    onWindowStateChanged: (listener) => {
+        /** @param {import('electron').IpcRendererEvent} _event @param {{ maximized: boolean }} state */
+        const handler = (_event, state) => listener(state);
+        ipcRenderer.on('zhijian:windowStateChanged', handler);
+        return () => ipcRenderer.removeListener('zhijian:windowStateChanged', handler);
+    },
 };
 
 contextBridge.exposeInMainWorld('zhijian', api);

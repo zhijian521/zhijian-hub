@@ -1,69 +1,75 @@
 /*============================================================================
-  theme — 中国风简约亮色主题
+  theme — 苔痕 · 竹青
 
-  文人书斋 · 水墨宣纸 · 温润雅致
-  朱砂红主色，素净背景，留白呼吸感强
-  只含亮色主题；暗色模式等有明确需求时再作为新主题加入
+  雨后石阶的苔绿：竹青主色，赭石作次强调，朱红只留给危险操作。
+  只含亮色主题；颜色一律写在这里，tokens.css 不放颜色。
 ============================================================================*/
 
 :root {
-    /*== 主色 · 朱砂红 ==*/
-    --primary: #9f000f;
-    --primary-foreground: #ffffff;
-    --primary-hover: #c41e3a;
-    --primary-active: #7a000b;
+    /*== 背景层：由外到内 4 级 ==*/
+    --bg: #f1f4ea; /* 页面与画布底（苔底） */
+    --surface: #fbfdf6; /* 面板、标题栏（苔面） */
+    --surface-raised: #ffffff; /* 菜单、弹窗（浮层） */
+    --sunken: #e5ebd8; /* 输入框、开关轨道（凹槽） */
 
-    /*== 副主色 · 竹青 ==*/
-    --secondary: #4a5d23;
-    --secondary-foreground: #ffffff;
+    /*== 文字层：3 级 ==*/
+    --fg: #1f2419; /* 松墨，正文 */
+    --fg-muted: #4f5745; /* 次要文字 */
+    --fg-subtle: #858d75; /* 辅助说明、占位符 */
+
+    /*== 描边 ==*/
+    --line: #d9e0c9;
+    --line-strong: #bfcaab;
+
+    /*== 主色 · 竹青 ==*/
+    --brand: #3f5a2a;
+    --brand-hover: #4f6f34;
+    --brand-active: #32471f;
+    --brand-soft: rgba(63, 90, 42, 0.09);
+    --on-brand: #fbfdf5;
+
+    /*== 次强调 · 赭石 ==*/
+    --accent: #8a5a2b;
+    --accent-soft: rgba(138, 90, 43, 0.12);
 
     /*== 语义色 ==*/
     --success: #4f7942;
-    --warning: #d48a2a;
-    --info: #3a6794;
-    --destructive: #ba1a1a;
-    --destructive-foreground: #ffffff;
+    --warning: #b8801e;
+    --danger: #b03a2e;
+    --danger-soft: rgba(176, 58, 46, 0.1);
 
-    /*== 文字色 ==*/
-    --foreground: #1d1b20; /* 墨色 */
-    --muted-foreground: #756e65; /* 淡墨，满足普通文本 AA 对比度 */
+    /*== 材质：顶部高光 / 底部阴影 / 深阴影 ==*/
+    --hi: rgba(255, 255, 255, 0.9);
+    --lo: rgba(40, 55, 25, 0.07);
+    --lo-deep: rgba(40, 55, 25, 0.18);
 
-    /*== 背景色 ==*/
-    --background: #fbf9f9; /* 宣纸白 */
-    --surface: #ffffff;
-    --muted: #f6efe7;
-    --highlight: #faf7f4;
+    /*== 阴影与焦点 ==*/
+    --shadow-sm: 0 1px 2px var(--lo);
+    --shadow: 0 6px 18px rgba(40, 55, 25, 0.14);
+    --shadow-lg: 0 16px 40px rgba(40, 55, 25, 0.2);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
 
-    /*== 边框色 ==*/
-    --border: #e7ddd1;
-    --border-strong: #d4c5b3;
-
-    /*== 浮层色 ==*/
-    --popover: #ffffff;
-    --overlay: rgba(45, 40, 35, 0.4);
-
-    /*== 阴影 ==*/
-    --shadow-sm: 0 1px 2px rgba(45, 40, 35, 0.08);
-    --shadow: 0 4px 16px rgba(45, 40, 35, 0.12);
-    --shadow-lg: 0 12px 48px rgba(45, 40, 35, 0.16);
-    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+    /*== 空间对象：靠材质区分，不靠颜色编码 ==*/
+    --room-fill: rgba(63, 90, 42, 0.05);
+    --room-line: rgba(63, 90, 42, 0.32);
+    /* 与正文色混合：亮底变深、暗底自动提亮，一套写法通吃 */
+    --room-name: color-mix(in srgb, var(--brand) 72%, var(--fg));
+    --fur-fill: #e8dcbf; /* 温润木色 */
+    --fur-line: #c4ab7f;
+    --fur-text: #6a5330;
+    --sto-fill: rgba(138, 90, 43, 0.12); /* 赭石收纳盒 */
+    --sto-line: rgba(138, 90, 43, 0.46);
+    --sto-text: #7c4e23;
 
     /*== 字体家族 ==*/
-    --font-serif: 'Noto Serif SC', 'Songti SC', 'Georgia', serif;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
     --font-sans:
         'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui,
         sans-serif;
-    --font-mono: 'SF Mono', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+    --font-mono: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
 
-    /*== 空间对象色板 ==*/
-    --room-fill: rgba(159, 0, 15, 0.04);
-    --room-stroke: color-mix(in srgb, var(--primary) 38%, transparent);
-    --furniture-fill: #e8dcc8; /* 温润木色 */
-    --furniture-stroke: #bda98b;
-    --storage-fill: rgba(159, 0, 15, 0.1); /* 淡朱砂收纳盒 */
-    --storage-stroke: color-mix(in srgb, var(--primary) 55%, transparent);
-
-    /*== 过渡 ==*/
-    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-fast: 0.15s ease;
+    /*== 过渡节奏 ==*/
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --transition-fast: 0.12s var(--ease-spring);
+    --transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }

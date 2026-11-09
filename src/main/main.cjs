@@ -11,7 +11,7 @@ const path = require('node:path');
 const { configurePaths } = require('./paths.cjs');
 const { createLogger } = require('./logger.cjs');
 const { openDatabase } = require('./database.cjs');
-const { registerIpc } = require('./ipc.cjs');
+const { registerIpc, WINDOW_STATE_EVENT } = require('./ipc.cjs');
 
 const isDev = process.argv.includes('--dev');
 const isSmoke = process.argv.includes('--smoke');
@@ -49,8 +49,16 @@ function createWindow() {
         minWidth: 1024,
         minHeight: 680,
         title: '知简 Hub',
-        backgroundColor: '#fbf9f9',
+        // 与苔痕主题的画布底色一致，避免启动瞬间闪白
+        backgroundColor: '#f1f4ea',
         show: false,
+        /*
+         * 自绘标题栏：去掉系统边框，min / max / close 由渲染层负责，
+         * 通过 `zhijian:windowControl` 回调主进程执行。
+         * thickFrame 保持开启，Windows 下的窗口阴影、贴边缩放和双击最大化仍然可用。
+         */
+        frame: false,
+        thickFrame: true,
         webPreferences: {
             preload: path.join(__dirname, '../preload/preload.cjs'),
             contextIsolation: true,
@@ -63,6 +71,14 @@ function createWindow() {
     window.once('ready-to-show', () => {
         window.show();
     });
+
+    // 最大化状态要同步给渲染层：按钮图标在"最大化"和"还原"之间切换。
+    const publishWindowState = () => {
+        if (!window || window.isDestroyed()) return;
+        window.webContents.send(WINDOW_STATE_EVENT, { maximized: window.isMaximized() });
+    };
+    window.on('maximize', publishWindowState);
+    window.on('unmaximize', publishWindowState);
 
     // 桌面应用不需要多标签：新窗口一律拒绝，导航一律拦下，外链交给系统浏览器时再单独开口。
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

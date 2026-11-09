@@ -23,13 +23,15 @@ body,
 body {
     margin: 0;
     font-family: var(--font-sans);
-    font-size: var(--text-base);
+    font-size: var(--text-sm);
     line-height: var(--leading-normal);
-    color: var(--foreground);
-    background: var(--background);
+    color: var(--fg);
+    background: var(--bg);
     -webkit-font-smoothing: antialiased;
     /* 桌面应用不需要整页滚动，滚动一律发生在具体面板内部。 */
     overflow: hidden;
+    /* 窗口自绘：默认禁用文本选择与拖拽，标题栏的拖拽区域另行声明 */
+    user-select: none;
 }
 
 button {
