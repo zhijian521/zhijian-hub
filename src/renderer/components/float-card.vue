@@ -68,9 +68,9 @@ defineEmits<{ close: [] }>();
     overflow: hidden;
 }
 
-/* 右侧卡片让开功能按钮列（右 16px + 宽 60px）。 */
+/* 右侧卡片：右侧没有按钮列了，直接贴边留 16px。 */
 .float-card.side-right {
-    right: 86px;
+    right: 16px;
 }
 
 /* 左侧卡片让开左侧菜单列，底部再给视图开关与比例尺留出位置。 */

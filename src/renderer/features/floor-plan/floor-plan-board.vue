@@ -5,13 +5,12 @@
   布局原则：界面里没有一条常驻的 header / footer / 侧边栏，画布铺满整个窗口。
   所有控件都是浮在画布上的「悬浮件」：
     · 顶部居中 —— 快捷搜索框（当前只有样式）
-    · 左上角   —— 菜单（家 / 储物 / 物品）
-    · 右上角   —— 图纸与导出
+    · 左上角   —— 菜单（家 / 储物 / 物品 / 图纸 / 导出）
     · 底部居中 —— 绘图工具与撤销重做
     · 左下角   —— 视图开关与比例尺
     · 右下角   —— 缩放
-  左右分工：左侧是「找东西」——菜单点开的列表卡片贴左展开；
-  右侧是「看东西 / 改东西」——房间与门窗的详情卡片贴右展开。
+  左右分工：左边是「菜单」，点开的列表卡片贴左展开；
+  右边是「详情」——房间与门窗属性贴右展开。
   两张卡片可以同时存在，都不挤压画布。
 ============================================================================*/
 
@@ -519,7 +518,7 @@ async function exportSvg() {
             </label>
         </div>
 
-        <!--== 左上：菜单（列表贴左展开） ====================================-->
+        <!--== 左上：菜单（家 / 储物 / 物品 / 图纸 / 导出） ==================-->
         <nav class="float-rail rail-left" aria-label="菜单">
             <button
                 v-for="item in menus"
@@ -533,10 +532,7 @@ async function exportSvg() {
                 <PlanIcon :name="item.icon" />
                 <span>{{ item.label }}</span>
             </button>
-        </nav>
-
-        <!--== 右上：图纸与导出 ==============================================-->
-        <nav class="float-rail rail-right" aria-label="图纸">
+            <span class="rail-divider" />
             <button
                 title="图纸"
                 aria-label="图纸"
@@ -547,7 +543,6 @@ async function exportSvg() {
                 <PlanIcon name="room" />
                 <span>图纸</span>
             </button>
-            <span class="rail-divider" />
             <button
                 title="导出图纸"
                 aria-label="导出图纸"
