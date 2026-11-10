@@ -3,10 +3,13 @@ import { describe, it } from 'node:test';
 
 import {
     arcPath,
+    BAY_DEPTH,
+    bayGeometry,
     doorGeometry,
     floorMaterial,
     hitWall,
     openingBox,
+    openingLabel,
     placeOpening,
     resizeRect,
     resolveFloor,
@@ -250,6 +253,7 @@ describe('resolveFloor', () => {
         width: 300,
         height: 200,
         floor: null,
+        outdoor: false,
         openings: [],
     };
 
@@ -262,5 +266,119 @@ describe('resolveFloor', () => {
     it('手动指定优先于房间名', () => {
         assert.equal(resolveFloor({ ...base, floor: 'tile' }), 'tile');
         assert.equal(resolveFloor({ ...base, name: '客厅', floor: 'wood' }), 'wood');
+    });
+});
+
+describe('bayGeometry', () => {
+    it('从墙中线向外凸出 BAY_DEPTH，正面玻璃比洞口更靠外', () => {
+        const bay = bayGeometry(ROOM, opening({ wall: 'top', pos: 100, width: 120 }));
+
+        // 顶墙法向朝室内（+y），外凸就是朝上（-y）。
+        assert.deepEqual(bay.out, { x: 0, y: -1 });
+        // 平台从墙中线 y=100 往外伸 26px，正好贴在墙的外侧。
+        assert.deepEqual(bay.box, { x: 200, y: 100 - BAY_DEPTH, width: 120, height: BAY_DEPTH });
+        assert.deepEqual(bay.front, {
+            x1: 200,
+            y1: 100 - BAY_DEPTH,
+            x2: 320,
+            y2: 100 - BAY_DEPTH,
+        });
+        assert.equal(bay.sides.length, 2);
+    });
+
+    it('四个墙向的外凸方向分别朝外，不会凸进房间里', () => {
+        const cases = [
+            { wall: 'top' as const, out: { x: 0, y: -1 } },
+            { wall: 'right' as const, out: { x: 1, y: 0 } },
+            { wall: 'bottom' as const, out: { x: 0, y: 1 } },
+            { wall: 'left' as const, out: { x: -1, y: 0 } },
+        ];
+        for (const entry of cases) {
+            const bay = bayGeometry(ROOM, opening({ wall: entry.wall, pos: 60, width: 120 }));
+            assert.deepEqual(bay.out, entry.out, `${entry.wall} 的外凸方向`);
+            // 平台矩形必须完全落在房间外面：与房间矩形没有面积交集。
+            const overlapX =
+                Math.min(bay.box.x + bay.box.width, ROOM.x + ROOM.width) -
+                Math.max(bay.box.x, ROOM.x);
+            const overlapY =
+                Math.min(bay.box.y + bay.box.height, ROOM.y + ROOM.height) -
+                Math.max(bay.box.y, ROOM.y);
+            // 顶/底墙只贴边不重叠（重叠高度 0），左/右墙同理。
+            assert.ok(overlapX <= 0 || overlapY <= 0, `${entry.wall} 的窗台不该压进房间`);
+        }
+    });
+
+    it('侧玻璃各接一段洞口端点到平台角点', () => {
+        const bay = bayGeometry(ROOM, opening({ wall: 'left', pos: 50, width: 60 }));
+        assert.deepEqual(bay.sides[0], {
+            x1: 100,
+            y1: 150,
+            x2: 100 - BAY_DEPTH,
+            y2: 150,
+        });
+        assert.deepEqual(bay.sides[1], {
+            x1: 100,
+            y1: 210,
+            x2: 100 - BAY_DEPTH,
+            y2: 210,
+        });
+    });
+});
+
+describe('bayGeometry · 三线窗与台面', () => {
+    const top = () => bayGeometry(ROOM, opening({ wall: 'top', pos: 100, width: 120 }));
+    const coords = (d: string) => d.replace(/[ML]/g, ' ').trim().split(/\s+/).map(Number);
+
+    it('三条同心折线各绕三面一圈，拐角处连成一个闭合的 U', () => {
+        const bay = top();
+        assert.equal(bay.panes.length, 3);
+        for (const pane of bay.panes) {
+            assert.ok(pane.startsWith('M '), '每条窗线是一条 path');
+            // M + 三个 L = 8 个数字；三个拐角共用端点，所以是「一笔画完」的 U 形。
+            assert.equal(coords(pane).length, 8);
+        }
+        // 三条线由外到内，y 的极值逐条往里收。
+        const fronts = bay.panes.map((d) => Math.min(...coords(d).filter((_, i) => i % 2 === 1)));
+        assert.ok(fronts[0] < fronts[1] && fronts[1] < fronts[2], '三条线由外到内依次收进');
+    });
+
+    it('两侧端点落在墙线上：U 形是敞口的，不会盖住墙', () => {
+        const bay = top();
+        const ys = coords(bay.panes[0]!).filter((_, i) => i % 2 === 1);
+        // 顶墙飘窗向外凸（-y），敞口那一侧就是轮廓的下边。
+        assert.equal(ys[0], bay.box.y + bay.box.height);
+        assert.equal(ys[ys.length - 1], bay.box.y + bay.box.height);
+    });
+
+    it('台面落在三条窗线之内，不覆盖窗线', () => {
+        const bay = top();
+        assert.ok(bay.sill.width > 0 && bay.sill.height > 0);
+        assert.ok(bay.sill.x >= bay.box.x && bay.sill.y >= bay.box.y);
+        assert.ok(bay.sill.x + bay.sill.width <= bay.box.x + bay.box.width + 0.001);
+        assert.ok(bay.sill.y + bay.sill.height <= bay.box.y + bay.box.height + 0.001);
+    });
+
+    it('台面内侧有一条虚线，横跨台面', () => {
+        const bay = top();
+        assert.equal(bay.sillEdge.y1, bay.sillEdge.y2, '顶墙飘窗的虚线是水平的');
+        assert.ok(Math.abs(bay.sillEdge.x1 - bay.sill.x) < 0.001);
+        assert.ok(Math.abs(bay.sillEdge.x2 - (bay.sill.x + bay.sill.width)) < 0.001);
+        assert.ok(Math.abs(bay.sillEdge.y1 - (bay.box.y + bay.box.height)) < 0.001);
+    });
+
+    it('竖墙飘窗的三线窗与虚线跟着转 90 度', () => {
+        const left = bayGeometry(ROOM, opening({ wall: 'left', pos: 50, width: 60 }));
+        assert.equal(left.panes.length, 3);
+        const xs = coords(left.panes[0]!).filter((_, i) => i % 2 === 0);
+        assert.equal(xs[0], left.box.x + left.box.width, '左墙飘窗的敞口落在轮廓右边');
+        assert.equal(left.sillEdge.x1, left.sillEdge.x2, '左墙飘窗的虚线是竖直的');
+    });
+});
+
+describe('openingLabel', () => {
+    it('三种洞口的名字稳定，界面与列表共用一份', () => {
+        assert.equal(openingLabel('door'), '平开门');
+        assert.equal(openingLabel('window'), '标准窗');
+        assert.equal(openingLabel('bay'), '飘窗');
     });
 });

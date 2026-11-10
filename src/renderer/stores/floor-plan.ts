@@ -20,6 +20,8 @@ export const GRID_SIZE = 6;
 export const MIN_ROOM_SIZE = 60;
 export const DOOR_WIDTH = 54;
 export const WINDOW_WIDTH = 90;
+/** 飘窗默认洞口宽 120px = 2m：飘窗比普通窗窄了就不像飘窗了。 */
+export const BAY_WIDTH = 120;
 export function toMeters(px: number): number {
     return Math.round(px / 6) / 10;
 }
@@ -171,6 +173,8 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
         removeRoom: (id: string) => run({ type: 'remove-room', id }),
         setRoomFloor: (id: string, floor: FloorMaterial | null) =>
             run({ type: 'set-room-floor', id, floor }),
+        setRoomOutdoor: (id: string, outdoor: boolean) =>
+            run({ type: 'set-room-outdoor', id, outdoor }),
         addOpening: (
             roomId: string,
             kind: OpeningKind,

@@ -424,6 +424,77 @@ describe('floor-plan-store · 门窗与缩放', () => {
     });
 });
 
+describe('floor-plan-store · 飘窗', () => {
+    function setup() {
+        const db = openDatabase(':memory:');
+        const run = (command) => applyCommand(db, command);
+        run({ type: 'create-plan', name: '我的家' });
+        const state = run({ type: 'add-room', rect: { x: 0, y: 0, width: 300, height: 200 } });
+        return { db, run, room: state.rooms[0] };
+    }
+
+    it("kind='bay' 能写进库并原样读回（版本 2 的 CHECK 曾把它拦下）", () => {
+        const { db, run, room } = setup();
+        const state = run({
+            type: 'add-opening',
+            roomId: room.id,
+            kind: 'bay',
+            wall: 'top',
+            pos: 90,
+            width: 120,
+        });
+
+        assert.equal(state.rooms[0].openings.length, 1);
+        assert.equal(state.rooms[0].openings[0].kind, 'bay');
+        const stored = db.prepare('SELECT kind FROM openings WHERE room_id = ?').get(room.id);
+        assert.equal(stored.kind, 'bay');
+        db.close();
+    });
+
+    it('恢复图纸时飘窗不丢', () => {
+        const { db, run, room } = setup();
+        run({
+            type: 'add-opening',
+            roomId: room.id,
+            kind: 'bay',
+            wall: 'top',
+            pos: 90,
+            width: 120,
+        });
+        const before = run({
+            type: 'add-opening',
+            roomId: room.id,
+            kind: 'window',
+            wall: 'bottom',
+            pos: 40,
+            width: 90,
+        });
+        const after = run({ type: 'replace-rooms', rooms: before.rooms });
+        assert.deepEqual(
+            after.rooms[0].openings.map((opening) => opening.kind),
+            ['bay', 'window'],
+        );
+        db.close();
+    });
+
+    it('未知洞口类型仍然拒绝', () => {
+        const { db, run, room } = setup();
+        assert.throws(
+            () =>
+                run({
+                    type: 'add-opening',
+                    roomId: room.id,
+                    kind: 'porthole',
+                    wall: 'top',
+                    pos: 10,
+                    width: 40,
+                }),
+            /洞口类型无效/,
+        );
+        db.close();
+    });
+});
+
 describe('floor-plan-store · 储物设备与物品', () => {
     /** 建一套最小户型：一间房 + 一个柜子。 */
     function seed() {
@@ -586,6 +657,49 @@ describe('floor-plan-store · 门窗编辑与地面材质', () => {
         });
         return state.rooms[0].openings[0];
     }
+
+    it('新房间默认是室内，不是阳台', () => {
+        const { db, room } = setup();
+        assert.equal(room.outdoor, false);
+        db.close();
+    });
+
+    it('标记与取消阳台', () => {
+        const { db, run, room } = setup();
+
+        assert.equal(
+            run({ type: 'set-room-outdoor', id: room.id, outdoor: true }).rooms[0].outdoor,
+            true,
+        );
+        assert.equal(
+            run({ type: 'set-room-outdoor', id: room.id, outdoor: false }).rooms[0].outdoor,
+            false,
+        );
+        db.close();
+    });
+
+    it('阳台标记只接受布尔值，且房间必须存在', () => {
+        const { db, run, room } = setup();
+
+        assert.throws(
+            () => run({ type: 'set-room-outdoor', id: room.id, outdoor: 'true' }),
+            /布尔值/,
+        );
+        assert.throws(
+            () => run({ type: 'set-room-outdoor', id: 'nope', outdoor: true }),
+            /房间不存在/,
+        );
+        db.close();
+    });
+
+    it('恢复图纸时保留阳台标记', () => {
+        const { db, run, room } = setup();
+        const state = run({ type: 'set-room-outdoor', id: room.id, outdoor: true });
+
+        const restored = run({ type: 'replace-rooms', rooms: state.rooms });
+        assert.equal(restored.rooms[0].outdoor, true);
+        db.close();
+    });
 
     it('新房间的地面材质是未指定（按名字推断）', () => {
         const { db, room } = setup();

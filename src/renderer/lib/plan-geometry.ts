@@ -173,6 +173,170 @@ export function windowLines(room: Rect, opening: Opening, thickness: number): Li
     }));
 }
 
+/*== 飘窗 ==*/
+
+/**
+ * 飘窗向外凸出的进深。26px ≈ 430 mm —— 住宅飘窗的常见出挑量，
+ * 再浅就不像"能坐人的窗台"，再深平面图上会把相邻房间吃掉。
+ */
+export const BAY_DEPTH = 26;
+
+/**
+ * 飘窗玻璃带在平面上的深度：三条平行线挤在这么宽的一条带子里
+ * （最外一条贴近轮廓，中间一条是玻璃，最内一条是内侧框边）。
+ * 6px ≈ 100 mm，和真实窗框断面同一量级，缩到 40% 缩放也还分得清三条。
+ */
+export const BAY_GLASS_BAND = 6;
+
+/** 洞口类型的中文名，图纸属性面板与列表共用一份，避免各处各写一套三元表达式。 */
+export function openingLabel(kind: Opening['kind']): string {
+    if (kind === 'door') return '平开门';
+    if (kind === 'bay') return '飘窗';
+    return '标准窗';
+}
+
+export interface BayGeometry {
+    /** 凸出到室外的整块轮廓，用轴对齐矩形表示 */
+    box: Rect;
+    /** 窗台面：轮廓里那块真正能坐人的台面，画成极淡的铺装色 */
+    sill: Rect;
+    /**
+     * 三线窗：每一面玻璃画三条平行细线，三面连成三条 U 形折线（SVG path d）。
+     *
+     * 关键是用**一条折线绕一圈**而不是每面各画三条不相关的线：真正连起来的
+     * 是三条同心的 U 形，拐角处两条边共用同一个端点，转角天然闭合，
+     * 不会像之前那样在三个转角各留一个豁口。
+     */
+    panes: string[];
+    /** 室内一侧的虚线：表示窗台板上方有出挑，真实图纸的通用画法 */
+    sillEdge: Line;
+    /** 正面玻璃线（离墙最远的那一条），给预览与命中测试用 */
+    front: Line;
+    /** 两端侧玻璃线 */
+    sides: Line[];
+    /** 从墙中线往室外伸出的方向单位向量 */
+    out: Point;
+}
+
+/**
+ * 飘窗几何：以墙洞口为底，向外凸出一块进深 BAY_DEPTH 的平台，三面开玻璃。
+ *
+ * 画法照着真实户型图来，不用「有厚度的窗框」那一套（那是立面/效果图的做法）：
+ *   · 平面图上玻璃一律画成三条平行细线 —— 中间是玻璃，两侧是窗框断面，
+ *     三面各一组，看上去就是一个凸出去的玻璃盒；
+ *   · 台面是一整块浅色铺装，边界就是那三组窗线的内侧；
+ *   · 靠房间这一侧画一条虚线，表示上面的窗台板是出挑的（图纸通用语言）。
+ */
+/** 窗线坐标保留两位小数：SVG path 里不需要浮点尾巴，读起来也干净。 */
+const r6 = (n: number) => Math.round(n * 100) / 100;
+
+export function bayGeometry(room: Rect, opening: Opening): BayGeometry {
+    const span = wallSpan(room, opening.wall);
+    const start = { x: span.x + span.ux * opening.pos, y: span.y + span.uy * opening.pos };
+    const end = {
+        x: start.x + span.ux * opening.width,
+        y: start.y + span.uy * opening.width,
+    };
+    // 法向指向室内，往外凸出就是取反方向。
+    // nx / ny 必有一个是 0，取反会得到 -0 —— 数值上和 0 一样，但深层比较与
+    // 序列化里会露出来（-0 !== 0），所以显式归零。
+    const out = { x: span.nx === 0 ? 0 : -span.nx, y: span.ny === 0 ? 0 : -span.ny };
+    const farStart = { x: start.x + out.x * BAY_DEPTH, y: start.y + out.y * BAY_DEPTH };
+    const farEnd = { x: end.x + out.x * BAY_DEPTH, y: end.y + out.y * BAY_DEPTH };
+
+    const xs = [start.x, end.x, farStart.x, farEnd.x];
+    const ys = [start.y, end.y, farStart.y, farEnd.y];
+
+    const box = {
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+    };
+
+    const horizontal = out.y !== 0;
+    const across = horizontal ? box.width : box.height;
+
+    // 玻璃带净宽：真实外墙 240 mm 在图上就是 14.4px，飘窗的玻璃带取一半左右，
+    // 三条线的间距才够看清，又不会把 26px 的进深吃掉。
+    const band = Math.min(BAY_GLASS_BAND, across / 6, BAY_DEPTH / 3);
+    const near = 0.7; // 最外侧那条线离轮廓边留一点点，不然和外墙线粘在一起
+
+    const panes: string[] = [];
+    // 三条线从贴轮廓（near）到贴台面（band - near），逐条往里收。
+    const offsets = [0, 1, 2].map((i) => near + (band - near * 2) * (i / 2));
+
+    if (horizontal) {
+        const outward = out.y < 0;
+        // 靠房间那一侧就是墙线；U 形从这里出发，绕到凸出的正面再回来。
+        const wallFace = outward ? box.y + box.height : box.y;
+        for (const offset of offsets) {
+            const frontY = outward ? box.y + offset : box.y + box.height - offset;
+            panes.push(
+                `M ${r6(box.x + offset)} ${r6(wallFace)}` +
+                    ` L ${r6(box.x + offset)} ${r6(frontY)}` +
+                    ` L ${r6(box.x + box.width - offset)} ${r6(frontY)}` +
+                    ` L ${r6(box.x + box.width - offset)} ${r6(wallFace)}`,
+            );
+        }
+    } else {
+        const outward = out.x < 0;
+        const wallFace = outward ? box.x + box.width : box.x;
+        for (const offset of offsets) {
+            const frontX = outward ? box.x + offset : box.x + box.width - offset;
+            panes.push(
+                `M ${r6(wallFace)} ${r6(box.y + offset)}` +
+                    ` L ${r6(frontX)} ${r6(box.y + offset)}` +
+                    ` L ${r6(frontX)} ${r6(box.y + box.height - offset)}` +
+                    ` L ${r6(wallFace)} ${r6(box.y + box.height - offset)}`,
+            );
+        }
+    }
+
+    // 台面：轮廓让开三面玻璃带
+    const sill = horizontal
+        ? {
+              x: box.x + band,
+              y: out.y < 0 ? box.y + band : box.y,
+              width: box.width - band * 2,
+              height: box.height - band,
+          }
+        : {
+              x: out.x < 0 ? box.x + band : box.x,
+              y: box.y + band,
+              width: box.width - band,
+              height: box.height - band * 2,
+          };
+
+    // 靠房间那一侧的虚线：画在墙中线上，横跨台面宽度，表示窗台板是出挑的。
+    const sillEdge: Line = horizontal
+        ? {
+              x1: sill.x,
+              y1: out.y < 0 ? box.y + box.height : box.y,
+              x2: sill.x + sill.width,
+              y2: out.y < 0 ? box.y + box.height : box.y,
+          }
+        : {
+              x1: out.x < 0 ? box.x + box.width : box.x,
+              y1: sill.y,
+              x2: out.x < 0 ? box.x + box.width : box.x,
+              y2: sill.y + sill.height,
+          };
+
+    return {
+        box,
+        sill,
+        panes,
+        sillEdge,
+        front: { x1: farStart.x, y1: farStart.y, x2: farEnd.x, y2: farEnd.y },
+        sides: [
+            { x1: start.x, y1: start.y, x2: farStart.x, y2: farStart.y },
+            { x1: end.x, y1: end.y, x2: farEnd.x, y2: farEnd.y },
+        ],
+        out,
+    };
+}
+
 /*== 八方向缩放 ==*/
 
 export type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';

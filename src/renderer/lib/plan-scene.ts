@@ -1,8 +1,10 @@
 import type { Opening, Rect, Room, WallSide } from '../app/types';
-import { WALL_SIDES, wallSpan, wallSegments, type Line } from './plan-geometry.ts';
+import { bayGeometry, WALL_SIDES, wallSpan, wallSegments, type Line } from './plan-geometry.ts';
 
 export const EXTERIOR_WALL = 14.4; // 240 mm at 60 px/m
 export const INTERIOR_WALL = 7.2; // 120 mm
+/** 阳台栏杆：100 mm 的细条，比隔墙还薄，远看是一条线而不是一道墙。 */
+export const RAILING_THICKNESS = 5;
 export const SNAP = 6; // 100 mm
 export const MILLIMETERS_PER_PIXEL = 1000 / 60;
 const EPSILON = 0.01;
@@ -50,6 +52,8 @@ export interface SceneWall extends Line {
     key: string;
     thickness: number;
     shared: boolean;
+    /** 这段只属于户外空间（阳台/露台）的外侧，要画成栏杆而不是实心墙。 */
+    outdoor: boolean;
 }
 
 interface Edge {
@@ -70,6 +74,7 @@ interface WallLine {
  */
 export function buildWalls(rooms: Room[]): SceneWall[] {
     const graph = new Map<string, WallLine>();
+    const outdoorRooms = new Map(rooms.map((room) => [room.id, room.outdoor]));
     for (const room of rooms)
         for (const side of WALL_SIDES) {
             const span = wallSpan(room, side);
@@ -97,7 +102,10 @@ export function buildWalls(rooms: Room[]): SceneWall[] {
             const owners = line.edges.filter((e) => e.start <= start && e.end >= end);
             if (!owners.length) continue;
             const shared = new Set(owners.map((e) => e.roomId)).size > 1;
-            const thickness = shared ? INTERIOR_WALL : EXTERIOR_WALL;
+            // 户外空间朝外的那几面不砌墙：阳台上砌墙就没有阳台了。
+            // 只有「独占这段墙的房间全是户外空间」才算，与室内共用的墙照旧砌。
+            const outdoor = !shared && owners.every((e) => outdoorRooms.get(e.roomId) === true);
+            const thickness = shared ? INTERIOR_WALL : outdoor ? RAILING_THICKNESS : EXTERIOR_WALL;
             const holes = line.holes
                 .map((h) => ({
                     pos: Math.max(h.pos, start) - start,
@@ -122,6 +130,7 @@ export function buildWalls(rooms: Room[]): SceneWall[] {
                 result.push({
                     key: `${key}:${i}:${j}`,
                     shared,
+                    outdoor,
                     thickness,
                     x1: line.horizontal ? a : line.coordinate,
                     y1: line.horizontal ? line.coordinate : a,
@@ -181,6 +190,18 @@ export function clampOpening(
             (p) => !holes.some((h) => p < h.pos + h.width - EPSILON && p + width > h.pos + EPSILON),
         ) ?? null
     );
+}
+
+/**
+ * 飘窗必须朝室外凸出，因此它凸出来的那块窗台不能插进别的房间。
+ *
+ * 隔墙两侧都是室内，把飘窗开在隔墙上，窗台就正好长在邻居家里 —— 画出来是
+ * 一块悬空的玻璃盒子卡在两个房间之间。所以除了「这段墙不是共用墙」之外，
+ * 还要用真实几何校验一次：窗台矩形和任何别的房间都不许相交。
+ */
+export function bayFits(rooms: Room[], room: Room, opening: Opening): boolean {
+    if (opening.kind !== 'bay') return true;
+    return !overlapsRoom(bayGeometry(room, opening).box, rooms, room.id);
 }
 
 export function openingFits(room: Room, rect: Rect): boolean {

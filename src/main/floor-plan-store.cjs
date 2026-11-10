@@ -17,8 +17,8 @@ const MAX_NAME_LENGTH = 40;
 /** 墙面方向：top/bottom 沿 x 轴（长度取 width），left/right 沿 y 轴（取 height）。 */
 const WALLS = new Set(['top', 'right', 'bottom', 'left']);
 
-/** 洞口类型。 */
-const KINDS = new Set(['door', 'window']);
+/** 洞口类型：平开门、标准窗、飘窗（外凸一块带三面玻璃的平台）。 */
+const KINDS = new Set(['door', 'window', 'bay']);
 
 /** 地面材质。NULL 表示按房间名自动推断。
  * 只有 wood / tile / small 能按房间名推断，其余都只能手动指定。
@@ -92,7 +92,7 @@ function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
     try {
         db.exec('DELETE FROM rooms');
         const insertRoom = db.prepare(
-            'INSERT INTO rooms (id, name, x, y, width, height, floor, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO rooms (id, name, x, y, width, height, floor, outdoor, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         );
         const insertOpening = db.prepare(
             'INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -106,8 +106,21 @@ function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
             const rect = normalizeRect(room);
             const name = normalizeName(room.name, '房间名称');
             if (room.floor !== null && !FLOORS.has(room.floor)) fail('地面材质无效');
+            if (room.outdoor !== undefined && typeof room.outdoor !== 'boolean') {
+                fail('户外标记必须是布尔值');
+            }
             if (!Array.isArray(room.openings) || room.openings.length > 200) fail('门窗列表无效');
-            insertRoom.run(id, name, rect.x, rect.y, rect.width, rect.height, room.floor, order);
+            insertRoom.run(
+                id,
+                name,
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                room.floor,
+                room.outdoor === true ? 1 : 0,
+                order,
+            );
             room.openings.forEach((o, index) => {
                 if (
                     !o ||
@@ -278,7 +291,9 @@ function normalizeRect(value) {
 function loadState(db) {
     const row = db.prepare('SELECT id, name, room_seq, created_at FROM floor_plan').get();
     const rooms = db
-        .prepare('SELECT id, name, x, y, width, height, floor FROM rooms ORDER BY sort_order')
+        .prepare(
+            'SELECT id, name, x, y, width, height, floor, outdoor FROM rooms ORDER BY sort_order',
+        )
         .all()
         .map((room) => ({
             id: room.id,
@@ -288,6 +303,7 @@ function loadState(db) {
             width: room.width,
             height: room.height,
             floor: room.floor ?? null,
+            outdoor: room.outdoor === 1,
             openings: [],
         }));
 
@@ -543,6 +559,25 @@ function setRoomFloor(db, rawId, rawFloor) {
 }
 
 /**
+ * 设置房间是否为户外空间（阳台 / 露台）。
+ *
+ * 只改一个标记位：几何、门窗、储物一概不动。渲染层据此把那几面朝外的墙
+ * 换成栏杆；与邻室共用的墙仍然照旧画实心墙（阳台与客厅之间本来就有墙和推拉门）。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {unknown} rawId
+ * @param {unknown} rawOutdoor
+ */
+function setRoomOutdoor(db, rawId, rawOutdoor) {
+    const id = normalizeName(rawId, '房间 id');
+    if (typeof rawOutdoor !== 'boolean') fail('户外标记必须是布尔值');
+    const result = db
+        .prepare('UPDATE rooms SET outdoor = ? WHERE id = ?')
+        .run(rawOutdoor ? 1 : 0, id);
+    if (result.changes === 0) fail('房间不存在');
+    return loadState(db);
+}
+
+/**
  * 修改已有门窗：位置、宽度、开启方向，只传要改的字段。
  *
  * 校验按合并后的结果做，而不是逐字段 —— 单独把宽度调大会超出墙面，
@@ -767,6 +802,8 @@ function dispatchCommand(db, command) {
             return removeOpening(db, command.id);
         case 'set-room-floor':
             return setRoomFloor(db, command.id, command.floor ?? null);
+        case 'set-room-outdoor':
+            return setRoomOutdoor(db, command.id, command.outdoor);
         case 'add-storage':
             return addStorage(db, /** @type {Record<string, unknown>} */ (command));
         case 'rename-storage':

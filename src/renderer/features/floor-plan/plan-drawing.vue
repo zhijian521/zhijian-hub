@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import type { Rect, Room, WallSide } from '@/app/types';
 import {
+    bayGeometry,
     doorGeometry,
     openingBox,
     resolveFloor,
@@ -49,6 +50,7 @@ const openings = computed(() =>
                     doorGeometry(room, opening).hinge,
                     doorGeometry(room, opening).leaf,
                 ),
+                bay: opening.kind === 'bay' ? bayGeometry(room, opening) : null,
             };
         }),
     ),
@@ -70,6 +72,7 @@ const wallRects = computed(() =>
                 key: wall.key,
                 horizontal,
                 shared: wall.shared,
+                outdoor: wall.outdoor,
                 x,
                 y: wall.y1 - wall.thickness / 2,
                 width: Math.abs(wall.x2 - wall.x1),
@@ -81,6 +84,7 @@ const wallRects = computed(() =>
             key: wall.key,
             horizontal,
             shared: wall.shared,
+            outdoor: wall.outdoor,
             x: wall.x1 - wall.thickness / 2,
             y,
             width: wall.thickness,
@@ -88,6 +92,201 @@ const wallRects = computed(() =>
         };
     }),
 );
+
+/** 实心墙：参与「整组并集浮雕」的那一批。 */
+const solidWalls = computed(() => wallRects.value.filter((wall) => !wall.outdoor));
+
+/** 某个点是不是在户型之外（不在任何房间里）。用来判断栏杆哪一侧朝室外。 */
+function pointIsOutside(rooms: Room[], x: number, y: number): boolean {
+    return !rooms.some(
+        (room) =>
+            x > room.x + 0.01 &&
+            x < room.x + room.width - 0.01 &&
+            y > room.y + 0.01 &&
+            y < room.y + room.height - 0.01,
+    );
+}
+
+const RAIL_FACE = 1.25; // 外沿线厚度（贴室外那一侧，栏杆的主线）
+const RAIL_INNER_LINE = 0.8; // 内沿线厚度（贴室内那一侧）
+const RAIL_TICK = 0.85; // 立柱刻度的宽度
+const RAIL_TICK_GAP = 6.4; // 刻度间距 ≈ 107 mm
+
+interface RailBand {
+    key: string;
+    horizontal: boolean;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    across: number;
+    outNegative: boolean;
+}
+
+interface RailPart {
+    key: string;
+    wall: RailBand;
+    face: Rect;
+    inner: Rect;
+    ticks: Rect[];
+    caps: Rect[];
+}
+
+/**
+ * 阳台栏杆：照真实户型图的画法 —— 两条平行细线 + 中间密排的短刻度。
+ *
+ * 上一版每段墙各画各的：外沿线勉强接得上，**内沿线却各走全程**，
+ * 到拐角处两条内线互相穿过、各自戳出一小截，看起来就是「没合上」。
+ * 这里改成先算出每段的两端是否接着别的栏杆段：
+ *   · 拐角处（垂直相接）内沿线整体让开一个墙厚，正好停在对面那条内线上；
+ *   · 转角处的方形由底板本身填掉，不再额外盖一块深色方块；
+ *   · 只有真正断头的地方（贴着实心墙、或者阳台开门的缺口两侧）才补一块端柱。
+ */
+const railingBands = computed<RailBand[]>(() =>
+    wallRects.value
+        .filter((wall) => wall.outdoor)
+        .map((wall) => {
+            const horizontal = wall.horizontal;
+            const across = horizontal ? wall.height : wall.width;
+            const midX = wall.x + wall.width / 2;
+            const midY = wall.y + wall.height / 2;
+            const outNegative = horizontal
+                ? pointIsOutside(props.rooms, midX, wall.y - 2)
+                : pointIsOutside(props.rooms, wall.x - 2, midY);
+            return {
+                key: wall.key,
+                horizontal,
+                x: wall.x,
+                y: wall.y,
+                width: wall.width,
+                height: wall.height,
+                across,
+                outNegative,
+            };
+        }),
+);
+
+const railings = computed<RailPart[]>(() => {
+    const bands = railingBands.value;
+    return bands.map((band) => {
+        const horizontal = band.horizontal;
+        const along = horizontal ? band.width : band.height;
+        const across = band.across;
+        const { outNegative } = band;
+
+        /** 从「室外那一面」往里量，thickness 是这条线的厚度。 */
+        const bandAt = (offset: number, thickness: number): Rect =>
+            horizontal
+                ? {
+                      x: band.x,
+                      y: outNegative ? band.y + offset : band.y + across - offset - thickness,
+                      width: along,
+                      height: thickness,
+                  }
+                : {
+                      x: outNegative ? band.x + offset : band.x + across - offset - thickness,
+                      y: band.y,
+                      width: thickness,
+                      height: along,
+                  };
+
+        // 两端接不接着别的栏杆：往外探 1.2px 看有没有别的底板。
+        const probe = (sign: 1 | -1): RailBand | null => {
+            const rect: Rect = horizontal
+                ? {
+                      x: sign > 0 ? band.x + along : band.x - 1.2,
+                      y: band.y,
+                      width: 1.2,
+                      height: band.height,
+                  }
+                : {
+                      x: band.x,
+                      y: sign > 0 ? band.y + along : band.y - 1.2,
+                      width: band.width,
+                      height: 1.2,
+                  };
+            return (
+                bands.find(
+                    (other) =>
+                        other.key !== band.key &&
+                        other.x < rect.x + rect.width + 0.6 &&
+                        other.x + other.width > rect.x - 0.6 &&
+                        other.y < rect.y + rect.height + 0.6 &&
+                        other.y + other.height > rect.y - 0.6,
+                ) ?? null
+            );
+        };
+        const atStart = probe(-1);
+        const atEnd = probe(1);
+        // 只有垂直相接才需要让位；同一直线上的两段本来就共享同一条内线。
+        const trimStart =
+            atStart && atStart.horizontal !== horizontal ? across - RAIL_INNER_LINE : 0;
+        const trimEnd = atEnd && atEnd.horizontal !== horizontal ? across - RAIL_INNER_LINE : 0;
+
+        // 内沿线缩到两个转角之间，正好停在对面那条内线上。
+        const innerSpan = Math.max(0, along - trimStart - trimEnd);
+        const inner: Rect = horizontal
+            ? {
+                  x: band.x + trimStart,
+                  y: outNegative ? band.y + across - RAIL_INNER_LINE : band.y,
+                  width: innerSpan,
+                  height: RAIL_INNER_LINE,
+              }
+            : {
+                  x: outNegative ? band.x + across - RAIL_INNER_LINE : band.x,
+                  y: band.y + trimStart,
+                  width: RAIL_INNER_LINE,
+                  height: innerSpan,
+              };
+
+        // 两条线之间的短刻度：同样只排在两个转角之间，端点留出半格。
+        const tickSize = Math.max(0.6, across - RAIL_FACE - RAIL_INNER_LINE);
+        const count = Math.max(1, Math.round(innerSpan / RAIL_TICK_GAP));
+        const ticks: Rect[] = [];
+        for (let i = 1; i < count; i += 1) {
+            const offsetAlong = (innerSpan * i) / count;
+            ticks.push(
+                horizontal
+                    ? {
+                          x: band.x + trimStart + offsetAlong - RAIL_TICK / 2,
+                          y: outNegative
+                              ? band.y + RAIL_FACE
+                              : band.y + across - RAIL_FACE - tickSize,
+                          width: RAIL_TICK,
+                          height: tickSize,
+                      }
+                    : {
+                          x: outNegative
+                              ? band.x + RAIL_FACE
+                              : band.x + across - RAIL_FACE - tickSize,
+                          y: band.y + trimStart + offsetAlong - RAIL_TICK / 2,
+                          width: tickSize,
+                          height: RAIL_TICK,
+                      },
+            );
+        }
+
+        // 断头才补端柱：贴着实心墙、或者阳台开门缺口的两侧。
+        const caps: Rect[] = [];
+        const cap = (sign: 1 | -1): Rect => {
+            const at = sign > 0 ? along - across : 0;
+            return horizontal
+                ? { x: band.x + at, y: band.y, width: across, height: across }
+                : { x: band.x, y: band.y + at, width: across, height: across };
+        };
+        if (!atStart) caps.push(cap(-1));
+        if (!atEnd) caps.push(cap(1));
+
+        return {
+            key: band.key,
+            wall: band,
+            face: bandAt(0, RAIL_FACE),
+            inner,
+            ticks,
+            caps,
+        };
+    });
+});
 
 const LEAF_THICKNESS = 2.6;
 
@@ -452,7 +651,7 @@ function jambsOf(box: Rect, wall: WallSide) {
         <g pointer-events="none">
             <g filter="url(#plan-wall-shadow)" opacity="0.42">
                 <rect
-                    v-for="wall in wallRects"
+                    v-for="wall in solidWalls"
                     :key="`shadow-${wall.key}`"
                     :x="wall.x + 2.2"
                     :y="wall.y + 2.8"
@@ -463,7 +662,7 @@ function jambsOf(box: Rect, wall: WallSide) {
             </g>
             <g filter="url(#plan-wall-relief)">
                 <rect
-                    v-for="wall in wallRects"
+                    v-for="wall in solidWalls"
                     :key="`face-${wall.key}`"
                     :x="wall.x"
                     :y="wall.y"
@@ -472,13 +671,38 @@ function jambsOf(box: Rect, wall: WallSide) {
                     fill="#eef1e8"
                 />
                 <rect
-                    v-for="wall in wallRects.filter((entry) => entry.shared)"
+                    v-for="wall in solidWalls.filter((entry) => entry.shared)"
                     :key="`face-shared-${wall.key}`"
                     :x="wall.x"
                     :y="wall.y"
                     :width="wall.width"
                     :height="wall.height"
                     fill="#ccd4c5"
+                />
+            </g>
+        </g>
+
+        <!-- 阳台栏杆：两条平行细线 + 中间密排的短刻度。
+             颜色全部取主题令牌：底板是「小砖地面」那档浅色，外沿压 --line-strong，
+             内沿走 --ruler，刻度用 --fg-subtle —— 和墙体、地面共用一套灰绿，
+             不另外给栏杆发明颜色，它才不会在图纸里跳出来。 -->
+        <g pointer-events="none">
+            <g v-for="rail in railings" :key="`rail-${rail.key}`">
+                <rect v-bind="rail.wall" fill="#eef1e8" />
+                <rect v-bind="rail.face" fill="#bfcaab" />
+                <rect v-bind="rail.inner" fill="#7a876a" />
+                <rect
+                    v-for="(tick, index) in rail.ticks"
+                    :key="`tick-${index}`"
+                    v-bind="tick"
+                    fill="#858d75"
+                    opacity="0.7"
+                />
+                <rect
+                    v-for="(cap, index) in rail.caps"
+                    :key="`cap-${index}`"
+                    v-bind="cap"
+                    fill="#7a876a"
                 />
             </g>
         </g>
@@ -533,6 +757,32 @@ function jambsOf(box: Rect, wall: WallSide) {
                 />
                 <circle :cx="item.door.hinge.x" :cy="item.door.hinge.y" r="1.4" fill="#2f3b34" />
                 <path :d="item.door.arc" fill="none" stroke="transparent" stroke-width="12" />
+            </template>
+            <!-- 飘窗：照真实户型图画成「一个凸出去的玻璃盒」。
+                   ① 台面：一整块极浅的铺装色，边界就是窗线的内侧，没有任何厚框；
+                   ② 三线窗：每一面玻璃画三条平行细线（中间那条是玻璃，两侧是框断面），
+                      三面共 9 条 —— 这是平面图上表示玻璃的标准画法；
+                   ③ 台面内侧一条虚线：表示上面的窗台板是出挑的。
+                 之前那版用「窗框 + 角柱 + 中梃」的有厚度色块，那是立面效果图的画法，
+                 放进平面图里会把台面压成一个小方块，反而看不出是飘窗。 -->
+            <template v-else-if="item.opening.kind === 'bay' && item.bay">
+                <rect v-bind="item.bay.sill" fill="#eef1e8" />
+                <path
+                    v-for="(pane, index) in item.bay.panes"
+                    :key="`bay-pane-${index}`"
+                    :d="pane"
+                    fill="none"
+                    :stroke="index === 1 ? '#7fa3ab' : '#4c7681'"
+                    :stroke-width="0.8"
+                    stroke-linejoin="round"
+                    stroke-linecap="round"
+                />
+                <line
+                    v-bind="item.bay.sillEdge"
+                    stroke="#7a876a"
+                    stroke-width="0.7"
+                    stroke-dasharray="4 3"
+                />
             </template>
             <template v-else>
                 <rect v-bind="item.box" fill="url(#plan-glass)" opacity="0.92" />

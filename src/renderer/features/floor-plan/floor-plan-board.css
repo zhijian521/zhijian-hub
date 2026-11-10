@@ -938,6 +938,56 @@ input[type='checkbox'] {
 
 .opening-actions > button {
     flex: 1;
+    /* 三个按钮（门 / 窗 / 飘窗）挤在 304px 的卡里，图标加两字刚好，
+       再窄就要折行，所以给一个下限让卡片先长出滚动条。 */
+    min-width: 0;
+    padding-inline: 6px;
+    white-space: nowrap;
+}
+
+/* 开关行：左边一个 checkbox，右边两行说明。
+   文字放 <span> 里而不是 label 的兄弟节点，点说明文字也能切换。 */
+.switch-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.switch-row:hover {
+    border-color: var(--line-strong);
+}
+
+.switch-row > input {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    margin: 2px 0 0;
+    accent-color: var(--brand);
+    cursor: pointer;
+}
+
+.switch-row > span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.switch-row b {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--fg);
+}
+
+.switch-row small {
+    color: var(--fg-subtle);
+    font-size: 9px;
+    line-height: 1.7;
 }
 
 .field-help {

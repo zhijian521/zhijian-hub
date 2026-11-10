@@ -30,7 +30,8 @@ export interface Rect {
 /** 墙面方向。top/bottom 从左端起算，left/right 从上端起算。 */
 export type WallSide = 'top' | 'right' | 'bottom' | 'left';
 
-export type OpeningKind = 'door' | 'window';
+/** 洞口类型。door 平开门、window 标准窗、bay 飘窗（外凸出一块带三面玻璃的平台）。 */
+export type OpeningKind = 'door' | 'window' | 'bay';
 
 /** 门的铰链在哪一端，决定门扇朝哪边开。 */
 export type HingeSide = 'start' | 'end';
@@ -69,6 +70,12 @@ export interface Room extends Rect {
     name: string;
     /*-- null 表示按房间名自动推断，用户手动选过之后是具体值 --*/
     floor: FloorMaterial | null;
+    /**
+     * 户外空间（阳台、露台）。
+     * 为 true 时，不与别的房间共用的那几面墙不再画成实心墙，改画栏杆，
+     * 于是同一块矩形既能当室内房间，也能当阳台，不需要另立一套几何。
+     */
+    outdoor: boolean;
     openings: Opening[];
 }
 
@@ -139,6 +146,7 @@ export type FloorPlanCommand =
     | { type: 'update-opening'; id: string; pos?: number; width?: number; hinge?: HingeSide }
     | { type: 'remove-opening'; id: string }
     | { type: 'set-room-floor'; id: string; floor: FloorMaterial | null }
+    | { type: 'set-room-outdoor'; id: string; outdoor: boolean }
     | { type: 'add-storage'; roomId: string; name: string; kind: StorageKind }
     | { type: 'rename-storage'; id: string; name: string }
     | { type: 'remove-storage'; id: string }

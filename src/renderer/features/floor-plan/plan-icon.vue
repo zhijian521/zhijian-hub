@@ -24,6 +24,11 @@ const paths: Record<string, string> = {
     sofa: 'M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M4 12a2 2 0 0 0-2 2v4h20v-4a2 2 0 0 0-2-2M4 12h16M6 18v3m12-3v3',
     cabinet: 'M5 3h14v18H5zM5 10h14M12 3v18M9 7h.01M15 14h.01',
     house: 'M4 10l8-6 8 6v10H4zM10 20v-6h4v6',
+    /*-- 飘窗：一个往外凸出的窗台，正面再切一刀 --*/
+    bay: 'M6 19V9h12v10M3 9h18M3 9l3-4h12l3 4M6 14h12',
+    /*-- 阳台：栏杆 + 两盆植物 --*/
+    balcony:
+        'M3 14h18M3 14v6h18v-6M7 14V9m5 5V9m5 5V9M5 6c0-1.5 1-2 2-2s2 .5 2 2M15 6c0-1.5 1-2 2-2s2 .5 2 2',
 };
 </script>
 <template>

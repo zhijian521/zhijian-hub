@@ -2,6 +2,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import type { Opening, Rect, Room } from '@/app/types';
 import { hitWall, resizeRect, wallSpan, type Point, type ResizeDir } from '@/lib/plan-geometry';
 import {
+    bayFits,
     boundsOf,
     clampOpening,
     openingFits,
@@ -10,9 +11,18 @@ import {
     wallOpenings,
     SNAP,
 } from '@/lib/plan-scene';
-import { DOOR_WIDTH, MIN_ROOM_SIZE, WINDOW_WIDTH, useFloorPlanStore } from '@/stores/floor-plan';
+import {
+    BAY_WIDTH,
+    DOOR_WIDTH,
+    MIN_ROOM_SIZE,
+    WINDOW_WIDTH,
+    useFloorPlanStore,
+} from '@/stores/floor-plan';
 
-export type PlanTool = 'select' | 'room' | 'door' | 'window' | 'hand';
+/** 绘图工具。door / window / bay 三种都走同一条「点墙放洞」的路径，只是洞口类型不同。 */
+export type PlanTool = 'select' | 'room' | 'door' | 'window' | 'bay' | 'hand';
+/** 会往墙上开洞的工具，判断时不用每次写三个 ||。 */
+const OPENING_TOOLS: PlanTool[] = ['door', 'window', 'bay'];
 
 /**
  * 浏览模式是默认态：只能看和搜，拖动是平移，点一下只做选中。
@@ -94,7 +104,7 @@ export function usePlanEditor() {
     }
     const placement = computed(() => {
         if (mode.value !== 'edit') return null;
-        if (!hover.value || !['door', 'window'].includes(tool.value)) return null;
+        if (!hover.value || !OPENING_TOOLS.includes(tool.value)) return null;
         let nearest: { room: Room; wall: Opening['wall']; along: number; distance: number } | null =
             null;
         for (const room of store.rooms) {
@@ -113,7 +123,8 @@ export function usePlanEditor() {
                 nearest = { room, ...hit, distance };
         }
         if (!nearest) return null;
-        const width = tool.value === 'door' ? DOOR_WIDTH : WINDOW_WIDTH;
+        const width =
+            tool.value === 'door' ? DOOR_WIDTH : tool.value === 'bay' ? BAY_WIDTH : WINDOW_WIDTH;
         const span = wallSpan(nearest.room, nearest.wall);
         const desired = Math.round((nearest.along - width / 2) / SNAP) * SNAP;
         const pos = clampOpening(
@@ -123,16 +134,19 @@ export function usePlanEditor() {
             wallOpenings(store.rooms, nearest.room, nearest.wall),
         );
         if (pos === null) return null;
+        const opening: Opening = {
+            id: 'preview',
+            kind: tool.value as 'door' | 'window' | 'bay',
+            wall: nearest.wall,
+            pos,
+            width,
+            hinge: 'start',
+        };
+        // 飘窗要凸到屋外：落在隔墙上时窗台会插进邻居家，这里直接判掉。
         return {
             room: nearest.room,
-            opening: {
-                id: 'preview',
-                kind: tool.value as 'door' | 'window',
-                wall: nearest.wall,
-                pos,
-                width,
-                hinge: 'start' as const,
-            },
+            opening,
+            blocked: !bayFits(store.rooms, nearest.room, opening),
         };
     });
     function chooseTool(value: PlanTool) {
@@ -218,11 +232,13 @@ export function usePlanEditor() {
         }
         if (store.busy) return;
         message.value = '';
-        if (tool.value === 'door' || tool.value === 'window') {
+        if (OPENING_TOOLS.includes(tool.value)) {
             hover.value = p;
             const target = placement.value;
-            if (!target) {
-                message.value = '请在有足够空间的墙面上放置门窗';
+            if (!target || target.blocked) {
+                message.value = target
+                    ? '飘窗只能开在外墙上，凸出的窗台不能伸进隔壁房间'
+                    : '请在有足够空间的墙面上放置门窗';
                 return;
             }
             store.select(target.room.id);
@@ -499,6 +515,7 @@ export function usePlanEditor() {
             r: 'room',
             d: 'door',
             w: 'window',
+            b: 'bay',
             h: 'hand',
         };
         if (shortcuts[key]) chooseTool(shortcuts[key]);

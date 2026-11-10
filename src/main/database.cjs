@@ -5,13 +5,13 @@
   原生模块要按 Electron ABI 重新编译，多一套 MSVC 工具链依赖，收益为零。
 
   schema 版本记在 `PRAGMA user_version`，迁移按版本递进。
-  当前版本 4：在版本 3 之上加储物设备与物品（房间 → 储物设备 → 物品）。
+  当前版本 6：房间（含户外标记）、洞口（门/窗/飘窗）、储物设备与物品。
 ============================================================================*/
 
 const { DatabaseSync } = require('node:sqlite');
 
 /** 当前 schema 版本。新增表或列时 +1，并在 MIGRATIONS 里补一段。 */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 6;
 
 /**
  * 版本 1：户型图与房间。
@@ -112,6 +112,48 @@ CREATE INDEX IF NOT EXISTS idx_items_storage ON items(storage_id);
 `;
 
 /**
+ * 版本 5：户外空间（阳台 / 露台）。
+ *
+ * 只在 rooms 上加一个布尔列，不给阳台另立一张表 —— 阳台在平面上仍是一个
+ * 矩形房间，它与室内的区别只有「朝外那几面墙不是实心墙，而是栏杆」。
+ * 用一个标记位表达这件事，房间的移动、缩放、改名、门窗、储物全部原样复用。
+ *
+ * 默认 0（室内），旧库升上来时不会被误判成阳台。
+ */
+const SCHEMA_V5 = `ALTER TABLE rooms ADD COLUMN outdoor INTEGER NOT NULL DEFAULT 0;`;
+
+/**
+ * 版本 6：飘窗（第三种洞口）。
+ *
+ * 版本 2 建 openings 时，`kind` 上写死了 `CHECK (kind IN ('door', 'window'))`，
+ * SQLite 又不支持改 CHECK 约束，于是即使 store 层放行 'bay'，写库那一刻也会被
+ * 数据库拦下来（报 `CHECK constraint failed: kind IN ('door', 'window')`）——
+ * 表现就是「飘窗怎么点都加不上」。
+ *
+ * 只能用「建新表 → 搬数据 → 删旧表 → 改名」重建。openings 是 rooms 的子表、
+ * 没有任何表引用它，所以删掉它不违反外键；索引随表一起消失，重建后再补。
+ */
+const SCHEMA_V6 = `
+CREATE TABLE openings_v6 (
+    id          TEXT PRIMARY KEY,
+    room_id     TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL CHECK (kind IN ('door', 'window', 'bay')),
+    wall        TEXT NOT NULL CHECK (wall IN ('top', 'right', 'bottom', 'left')),
+    pos         REAL NOT NULL CHECK (pos >= 0),
+    width       REAL NOT NULL CHECK (width > 0),
+    hinge       TEXT NOT NULL DEFAULT 'start' CHECK (hinge IN ('start', 'end')),
+    sort_order  INTEGER NOT NULL
+);
+
+INSERT INTO openings_v6 (id, room_id, kind, wall, pos, width, hinge, sort_order)
+    SELECT id, room_id, kind, wall, pos, width, hinge, sort_order FROM openings;
+
+DROP TABLE openings;
+ALTER TABLE openings_v6 RENAME TO openings;
+CREATE INDEX IF NOT EXISTS idx_openings_room ON openings(room_id);
+`;
+
+/**
  * 迁移脚本按版本号顺序执行：`MIGRATIONS[n]` 把库从版本 n 升到 n + 1。
  * 只向前迁移，不写回退逻辑（回退靠备份文件）。
  * @type {Array<(db: import('node:sqlite').DatabaseSync) => void>}
@@ -121,6 +163,8 @@ const MIGRATIONS = [
     (db) => db.exec(SCHEMA_V2),
     (db) => db.exec(SCHEMA_V3),
     (db) => db.exec(SCHEMA_V4),
+    (db) => db.exec(SCHEMA_V5),
+    (db) => db.exec(SCHEMA_V6),
 ];
 
 /**

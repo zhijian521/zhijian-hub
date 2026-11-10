@@ -21,8 +21,10 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { FloorMaterial, Opening, Room, StorageKind, StoredItem } from '@/app/types';
 import FloatCard from '@/components/float-card.vue';
 import {
+    bayGeometry,
     doorGeometry,
     openingBox,
+    openingLabel,
     resolveFloor,
     wallSpan,
     windowLines,
@@ -389,7 +391,12 @@ const ghost = computed(() => {
         box: openingBox(p.room, p.opening, EXTERIOR_WALL),
         door: doorGeometry(p.room, p.opening),
         panes: windowLines(p.room, p.opening, EXTERIOR_WALL),
+        bay: p.opening.kind === 'bay' ? bayGeometry(p.room, p.opening) : null,
         kind: p.opening.kind,
+        // 位置不合法（飘窗落在隔墙上）时预览改用警示色，点下去也会被拦。
+        blocked: p.blocked,
+        ink: p.blocked ? 'var(--danger)' : 'var(--brand)',
+        wash: p.blocked ? 'var(--danger-soft)' : 'var(--brand-soft)',
     };
 });
 const exportBounds = computed(() => {
@@ -404,6 +411,12 @@ const tools: { id: PlanTool; label: string; key: string; detail: string }[] = [
     { id: 'room', label: '房间', key: 'R', detail: '拖拽绘制房间，靠近墙面自动吸附' },
     { id: 'door', label: '门', key: 'D', detail: '点击墙面放置门，先选房间可指定开启侧' },
     { id: 'window', label: '窗', key: 'W', detail: '点击墙面放置窗' },
+    {
+        id: 'bay',
+        label: '飘窗',
+        key: 'B',
+        detail: '点击墙面放置飘窗，会向外凸出一块窗台',
+    },
     { id: 'hand', label: '平移', key: 'H', detail: '拖动画布查看户型' },
 ];
 
@@ -854,14 +867,14 @@ async function exportSvg() {
                         <rect
                             v-bind="ghost.box"
                             fill="#fff"
-                            stroke="var(--brand)"
+                            :stroke="ghost.ink"
                             :stroke-width="1 / zoom"
                         />
                         <template v-if="ghost.kind === 'door'">
                             <path
                                 :d="ghost.door.arc"
-                                fill="var(--brand-soft)"
-                                stroke="var(--brand)"
+                                :fill="ghost.wash"
+                                :stroke="ghost.ink"
                                 :stroke-width="1 / zoom"
                             />
                             <line
@@ -869,7 +882,7 @@ async function exportSvg() {
                                 :y1="ghost.door.hinge.y"
                                 :x2="ghost.door.leaf.x"
                                 :y2="ghost.door.leaf.y"
-                                stroke="var(--brand)"
+                                :stroke="ghost.ink"
                                 :stroke-width="2 / zoom"
                             />
                         </template>
@@ -877,9 +890,27 @@ async function exportSvg() {
                             v-for="(line, i) in ghost.kind === 'window' ? ghost.panes : []"
                             :key="i"
                             v-bind="line"
-                            stroke="var(--brand)"
+                            :stroke="ghost.ink"
                             :stroke-width="1 / zoom"
                         />
+                        <template v-if="ghost.kind === 'bay' && ghost.bay">
+                            <rect v-bind="ghost.bay.box" :fill="ghost.wash" />
+                            <path
+                                v-for="(pane, i) in ghost.bay.panes"
+                                :key="`ghost-bay-${i}`"
+                                :d="pane"
+                                fill="none"
+                                :stroke="ghost.ink"
+                                :stroke-width="0.8 / zoom"
+                                stroke-linejoin="round"
+                            />
+                            <line
+                                v-bind="ghost.bay.sillEdge"
+                                :stroke="ghost.ink"
+                                :stroke-width="0.8 / zoom"
+                                stroke-dasharray="4 3"
+                            />
+                        </template>
                     </g>
                 </g>
             </svg>
@@ -1197,7 +1228,7 @@ async function exportSvg() {
                             <PlanIcon :name="selectedOpening.kind" />
                         </span>
                         <div>
-                            <h2>{{ selectedOpening.kind === 'door' ? '平开门' : '标准窗' }}</h2>
+                            <h2>{{ openingLabel(selectedOpening.kind) }}</h2>
                             <p>{{ selectedRoom.name }} · {{ wallNames[selectedOpening.wall] }}</p>
                         </div>
                     </div>
@@ -1280,6 +1311,10 @@ async function exportSvg() {
                             <span>门窗</span>
                             <b>{{ selectedRoom.openings.length }} 处</b>
                         </div>
+                        <div v-if="selectedRoom.outdoor">
+                            <span>空间</span>
+                            <b>阳台</b>
+                        </div>
                         <div>
                             <span>地面</span>
                             <b>{{ selectedFloorLabel }}</b>
@@ -1355,6 +1390,26 @@ async function exportSvg() {
                     <p class="field-help">按墙体中心线计算；不作为套内净面积或建筑面积。</p>
                 </div>
                 <div v-if="mode === 'edit'" class="property-section">
+                    <h4>空间类型</h4>
+                    <label class="switch-row">
+                        <input
+                            type="checkbox"
+                            :checked="selectedRoom.outdoor"
+                            :disabled="store.busy"
+                            @change="
+                                store.setRoomOutdoor(
+                                    selectedRoom.id,
+                                    ($event.target as HTMLInputElement).checked,
+                                )
+                            "
+                        />
+                        <span>
+                            <b>户外空间（阳台）</b>
+                            <small>朝外的那几面墙会改画成栏杆，与别室共用的墙仍是实墙。</small>
+                        </span>
+                    </label>
+                </div>
+                <div v-if="mode === 'edit'" class="property-section">
                     <h4>地面材质</h4>
                     <div class="material-options">
                         <button
@@ -1389,7 +1444,7 @@ async function exportSvg() {
                         >
                             <PlanIcon :name="opening.kind" />
                             <span class="item-main">
-                                {{ opening.kind === 'door' ? '平开门' : '标准窗' }}
+                                {{ openingLabel(opening.kind) }}
                                 <small>
                                     {{ wallNames[opening.wall] }} · {{ mm(opening.width) }} mm
                                 </small>
@@ -1397,7 +1452,7 @@ async function exportSvg() {
                             <PlanIcon name="chevron" />
                         </button>
                         <p v-if="!selectedRoom.openings.length" class="field-help">
-                            选择「门」或「窗」，点击墙面放置。
+                            选择「门」「窗」或「飘窗」，点击墙面放置。
                         </p>
                     </div>
                     <div class="opening-actions">
@@ -1408,6 +1463,10 @@ async function exportSvg() {
                         <button class="button" @click="chooseTool('window')">
                             <PlanIcon name="window" />
                             加窗
+                        </button>
+                        <button class="button" @click="chooseTool('bay')">
+                            <PlanIcon name="bay" />
+                            加飘窗
                         </button>
                     </div>
                 </div>

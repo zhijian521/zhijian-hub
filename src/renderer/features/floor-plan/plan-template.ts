@@ -18,9 +18,10 @@ export function exampleRooms(): Room[] {
             width: 216,
             height: 216,
             floor: 'wood',
+            outdoor: false,
             openings: [
                 opening('sample-d1', 'door', 'bottom', 144, 54),
-                opening('sample-w1', 'window', 'top', 48, 120),
+                opening('sample-w1', 'bay', 'top', 48, 120),
             ],
         },
         {
@@ -31,6 +32,7 @@ export function exampleRooms(): Room[] {
             width: 180,
             height: 156,
             floor: 'wood',
+            outdoor: false,
             openings: [
                 opening('sample-d2', 'door', 'bottom', 108, 54),
                 opening('sample-w2', 'window', 'top', 42, 96),
@@ -44,6 +46,7 @@ export function exampleRooms(): Room[] {
             width: 144,
             height: 216,
             floor: 'small',
+            outdoor: false,
             openings: [
                 opening('sample-d3', 'door', 'left', 156, 54),
                 opening('sample-w3', 'window', 'top', 30, 84),
@@ -57,6 +60,7 @@ export function exampleRooms(): Room[] {
             width: 396,
             height: 234,
             floor: 'tile',
+            outdoor: false,
             openings: [opening('sample-d4', 'door', 'top', 270, 72)],
         },
         {
@@ -67,6 +71,7 @@ export function exampleRooms(): Room[] {
             width: 180,
             height: 60,
             floor: 'tile',
+            outdoor: false,
             openings: [],
         },
         {
@@ -77,6 +82,7 @@ export function exampleRooms(): Room[] {
             width: 144,
             height: 138,
             floor: 'small',
+            outdoor: false,
             openings: [
                 opening('sample-d5', 'door', 'left', 36, 48),
                 opening('sample-w4', 'window', 'right', 42, 54),
@@ -90,6 +96,7 @@ export function exampleRooms(): Room[] {
             width: 144,
             height: 96,
             floor: 'tile',
+            outdoor: false,
             openings: [
                 opening('sample-d6', 'door', 'bottom', 48, 60),
                 opening('sample-d7', 'door', 'left', 18, 60),
@@ -103,10 +110,8 @@ export function exampleRooms(): Room[] {
             width: 396,
             height: 78,
             floor: 'small',
-            openings: [
-                opening('sample-d8', 'door', 'top', 228, 72),
-                opening('sample-w5', 'window', 'bottom', 36, 324),
-            ],
+            outdoor: true,
+            openings: [opening('sample-d8', 'door', 'top', 228, 72)],
         },
     ];
 }

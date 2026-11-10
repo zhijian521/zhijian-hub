@@ -4,18 +4,20 @@ import type { Room } from '../src/renderer/app/types.ts';
 import { exampleRooms } from '../src/renderer/features/floor-plan/plan-template.ts';
 import { wallSpan } from '../src/renderer/lib/plan-geometry.ts';
 import {
+    bayFits,
     buildWalls,
     clampOpening,
     dimensionsOf,
     EXTERIOR_WALL,
     INTERIOR_WALL,
+    RAILING_THICKNESS,
     openingFits,
     overlapsRoom,
     snapCoordinate,
     wallOpenings,
 } from '../src/renderer/lib/plan-scene.ts';
 
-const room = (id: string, x = 0, y = 0, width = 240, height = 180): Room => ({
+const room = (id: string, x = 0, y = 0, width = 240, height = 180, outdoor = false): Room => ({
     id,
     name: id,
     x,
@@ -23,6 +25,7 @@ const room = (id: string, x = 0, y = 0, width = 240, height = 180): Room => ({
     width,
     height,
     floor: null,
+    outdoor,
     openings: [],
 });
 
@@ -128,5 +131,79 @@ describe('drafting constraints', () => {
             ['4000', '2000'],
         );
         assert.deepEqual(dimensionsOf([]), []);
+    });
+});
+
+describe('outdoor rooms', () => {
+    it('阳台朝外的那几面墙按栏杆厚度画', () => {
+        const walls = buildWalls([room('balcony', 0, 0, 240, 180, true)]);
+        assert.ok(walls.length > 0);
+        assert.ok(walls.every((w) => w.outdoor));
+        assert.ok(walls.every((w) => w.thickness === RAILING_THICKNESS));
+    });
+
+    it('阳台与室内共用的墙仍是实心隔墙', () => {
+        const walls = buildWalls([room('balcony', 0, 0, 240, 180, true), room('living', 240)]);
+        const shared = walls.filter((w) => w.shared);
+        assert.equal(shared.length, 1);
+        assert.equal(shared[0]!.thickness, INTERIOR_WALL);
+        assert.equal(shared[0]!.outdoor, false);
+        // 阳台自己另外三面朝外，仍画栏杆。
+        assert.equal(walls.filter((w) => w.outdoor).length, 3);
+    });
+
+    it('两个阳台贴在一起时共用的仍是隔墙，不画成两道栏杆', () => {
+        const walls = buildWalls([
+            room('balcony-a', 0, 0, 240, 180, true),
+            room('balcony-b', 240, 0, 240, 180, true),
+        ]);
+        const shared = walls.filter((w) => w.shared);
+        assert.equal(shared.length, 1);
+        assert.equal(shared[0]!.thickness, INTERIOR_WALL);
+        assert.equal(shared[0]!.outdoor, false);
+    });
+});
+
+describe('bay placement', () => {
+    const bay = (wall: 'top' | 'right' | 'bottom' | 'left', pos: number, width = 120) => ({
+        id: 'bay',
+        kind: 'bay' as const,
+        wall,
+        pos,
+        width,
+        hinge: 'start' as const,
+    });
+
+    it('贴外墙的飘窗放行', () => {
+        const only = room('bed', 0, 0, 300, 240);
+        assert.equal(bayFits([only], only, bay('top', 90)), true);
+    });
+
+    it('开在隔墙上的飘窗会被拦下 —— 窗台会凸进隔壁房间', () => {
+        const a = room('a', 0, 0, 240, 180);
+        const b = room('b', 240, 0, 240, 180);
+        // a 的右墙与 b 的左墙是同一面墙，飘窗凸出去正好落在 b 里。
+        assert.equal(bayFits([a, b], a, bay('right', 30)), false);
+        assert.equal(bayFits([a, b], b, bay('left', 30)), false);
+    });
+
+    it('普通窗不受这条限制：开在隔墙上合法（那是室内窗/垭口）', () => {
+        const a = room('a', 0, 0, 240, 180);
+        const b = room('b', 240, 0, 240, 180);
+        const opening = {
+            id: 'w',
+            kind: 'window' as const,
+            wall: 'right' as const,
+            pos: 30,
+            width: 90,
+            hinge: 'start' as const,
+        };
+        assert.equal(bayFits([a, b], a, opening), true);
+    });
+
+    it('上下相邻时同理，横墙上的飘窗会插进楼上/楼下', () => {
+        const a = room('a', 0, 0, 240, 180);
+        const b = room('b', 0, 180, 240, 180);
+        assert.equal(bayFits([a, b], a, bay('bottom', 40)), false);
     });
 });
