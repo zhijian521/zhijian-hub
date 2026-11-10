@@ -741,6 +741,17 @@ async function exportSvg() {
                             @pointerenter="hoverStorageId = box.id"
                             @pointerleave="hoverStorageId = null"
                         >
+                            <!-- 柜子也落一层淡影，和墙体的光影方向保持一致（右下偏移） -->
+                            <rect
+                                :x="box.x + 1.6 / zoom"
+                                :y="box.y + 2.2 / zoom"
+                                :width="box.width"
+                                :height="box.height"
+                                rx="1.5"
+                                fill="#1d2418"
+                                :opacity="0.16"
+                                pointer-events="none"
+                            />
                             <rect
                                 :x="box.x"
                                 :y="box.y"
