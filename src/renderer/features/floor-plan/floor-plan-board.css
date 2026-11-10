@@ -132,7 +132,8 @@ svg {
     transform: translateX(-50%);
     z-index: 32;
     width: 420px;
-    max-width: calc(100% - 260px);
+    /* 左右两侧各有一条 60px 按钮列，搜索框不能压到它们。 */
+    max-width: calc(100% - 360px);
 }
 
 .search-box {
@@ -187,11 +188,10 @@ svg {
     letter-spacing: 0.6px;
 }
 
-/* 右上：功能按钮列 —— 点一下在右侧展开对应卡片，再点收起。 */
+/* 左侧菜单 / 右上图纸：同一种竖排按钮列，分居左右 */
 .float-rail {
     position: absolute;
     top: 50px;
-    right: 16px;
     z-index: 32;
     display: flex;
     flex-direction: column;
@@ -202,6 +202,14 @@ svg {
     border-radius: 16px;
     box-shadow: var(--shadow);
     backdrop-filter: blur(12px) saturate(1.15);
+}
+
+.rail-left {
+    left: 16px;
+}
+
+.rail-right {
+    right: 16px;
 }
 
 .float-rail button {

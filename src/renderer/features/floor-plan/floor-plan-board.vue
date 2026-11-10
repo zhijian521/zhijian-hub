@@ -5,12 +5,14 @@
   布局原则：界面里没有一条常驻的 header / footer / 侧边栏，画布铺满整个窗口。
   所有控件都是浮在画布上的「悬浮件」：
     · 顶部居中 —— 快捷搜索框（当前只有样式）
-    · 右上角   —— 功能按钮列（家 / 储物 / 物品 / 图纸 / 导出）
+    · 左上角   —— 菜单（家 / 储物 / 物品）
+    · 右上角   —— 图纸与导出
     · 底部居中 —— 绘图工具与撤销重做
     · 左下角   —— 视图开关与比例尺
     · 右下角   —— 缩放
-  需要「打开什么」的交互一律从右侧弹出悬浮卡片（FloatCard），
-  卡片盖在画板上、自己不挤压画布，一次只开一张。
+  左右分工：左侧是「找东西」——菜单点开的列表卡片贴左展开；
+  右侧是「看东西 / 改东西」——房间与门窗的详情卡片贴右展开。
+  两张卡片可以同时存在，都不挤压画布。
 ============================================================================*/
 
 import { computed, nextTick, ref, watch } from 'vue';
@@ -67,13 +69,15 @@ const {
     setDimension,
 } = usePlanEditor();
 
-type CardId = 'none' | 'home' | 'storage' | 'items' | 'plan';
-const card = ref<CardId>('none');
-const rail: { id: CardId; label: string; icon: string }[] = [
+/* 左侧菜单：找东西的地方——点开的是列表卡片，贴在菜单右边。 */
+type MenuId = 'none' | 'home' | 'storage' | 'items';
+const menu = ref<MenuId>('none');
+/* 右侧详情：看/改一个具体对象——房间与门窗属性、图纸概览。 */
+const detail = ref(false);
+const menus: { id: MenuId; label: string; icon: string }[] = [
     { id: 'home', label: '家', icon: 'home' },
     { id: 'storage', label: '储物', icon: 'box' },
     { id: 'items', label: '物品', icon: 'tag' },
-    { id: 'plan', label: '图纸', icon: 'room' },
 ];
 const materials: { id: FloorMaterial; label: string }[] = [
     { id: 'wood', label: '橡木地板' },
@@ -178,19 +182,20 @@ const mm = (px: number) => Math.round(px * MILLIMETERS_PER_PIXEL);
 const wallNames = { top: '上侧墙', right: '右侧墙', bottom: '下侧墙', left: '左侧墙' };
 const presets = ['客餐厅', '主卧', '次卧', '书房', '厨房', '卫生间', '阳台', '玄关'];
 
-function toggleCard(id: CardId) {
-    card.value = card.value === id ? 'none' : id;
+/* 左侧菜单同一个按钮再点一次就收起，切到另一个则换成另一张列表。 */
+function toggleMenu(id: MenuId) {
+    menu.value = menu.value === id ? 'none' : id;
 }
-/* 在画布或列表里选中房间，详情卡片自动跟上来（用户关掉就不再自己弹）。 */
+/* 在画布或左侧列表里选中房间，右侧详情卡片自动跟上来（用户关掉就不再自己弹）。 */
 function openRoom(id: string) {
     selectRoom(id);
     chooseTool('select');
-    card.value = 'plan';
+    detail.value = true;
 }
 watch(
     () => store.selectedId,
     (id) => {
-        if (id) card.value = 'plan';
+        if (id) detail.value = true;
     },
 );
 watch(
@@ -263,7 +268,7 @@ function selectOpening(room: Room, opening: Opening) {
     store.select(room.id);
     selectedOpeningId.value = opening.id;
     tool.value = 'select';
-    card.value = 'plan';
+    detail.value = true;
 }
 async function createPlan(template: boolean) {
     if (!(await store.createPlan(newPlanName.value))) return;
@@ -514,19 +519,33 @@ async function exportSvg() {
             </label>
         </div>
 
-        <!--== 右上：功能按钮列 ==============================================-->
-        <nav class="float-rail" aria-label="功能">
+        <!--== 左上：菜单（列表贴左展开） ====================================-->
+        <nav class="float-rail rail-left" aria-label="菜单">
             <button
-                v-for="item in rail"
+                v-for="item in menus"
                 :key="item.id"
-                :class="{ active: card === item.id }"
+                :class="{ active: menu === item.id }"
                 :title="item.label"
                 :aria-label="item.label"
-                :aria-pressed="card === item.id"
-                @click="toggleCard(item.id)"
+                :aria-pressed="menu === item.id"
+                @click="toggleMenu(item.id)"
             >
                 <PlanIcon :name="item.icon" />
                 <span>{{ item.label }}</span>
+            </button>
+        </nav>
+
+        <!--== 右上：图纸与导出 ==============================================-->
+        <nav class="float-rail rail-right" aria-label="图纸">
+            <button
+                title="图纸"
+                aria-label="图纸"
+                :class="{ active: detail }"
+                :aria-pressed="detail"
+                @click="detail = !detail"
+            >
+                <PlanIcon name="room" />
+                <span>图纸</span>
             </button>
             <span class="rail-divider" />
             <button
@@ -623,14 +642,15 @@ async function exportSvg() {
             </button>
         </div>
 
-        <!--== 悬浮卡片 · 家 =================================================-->
+        <!--== 左侧卡片 · 家 =================================================-->
         <FloatCard
-            v-if="card === 'home'"
+            v-if="menu === 'home'"
             eyebrow="HOME"
+            side="left"
             :title="store.plan?.name || '还没有家'"
             :subtitle="`${store.rooms.length} 个空间 · ${totalArea} m² · ${openingCount} 处门窗`"
             :width="304"
-            @close="card = 'none'"
+            @close="menu = 'none'"
         >
             <div class="card-list">
                 <button
@@ -678,14 +698,15 @@ async function exportSvg() {
             </template>
         </FloatCard>
 
-        <!--== 悬浮卡片 · 储物设备 ===========================================-->
+        <!--== 左侧卡片 · 储物设备 ===========================================-->
         <FloatCard
-            v-if="card === 'storage'"
+            v-if="menu === 'storage'"
             eyebrow="STORAGE"
+            side="left"
             title="储物设备"
             subtitle="柜、架、箱都挂在具体房间里，物品才有位置。"
             :width="304"
-            @close="card = 'none'"
+            @close="menu = 'none'"
         >
             <div class="card-list">
                 <button
@@ -717,14 +738,15 @@ async function exportSvg() {
             </template>
         </FloatCard>
 
-        <!--== 悬浮卡片 · 添加物品 ===========================================-->
+        <!--== 左侧卡片 · 添加物品 ===========================================-->
         <FloatCard
-            v-if="card === 'items'"
+            v-if="menu === 'items'"
             eyebrow="ITEMS"
+            side="left"
             title="添加物品"
             subtitle="选一个房间，记下它的名字与位置。"
             :width="304"
-            @close="card = 'none'"
+            @close="menu = 'none'"
         >
             <label class="field-label">
                 物品名称
@@ -758,9 +780,10 @@ async function exportSvg() {
             </template>
         </FloatCard>
 
-        <!--== 悬浮卡片 · 图纸 / 详情 ========================================-->
+        <!--== 右侧卡片 · 图纸 / 详情 ========================================-->
         <FloatCard
-            v-if="card === 'plan'"
+            v-if="detail"
+            side="right"
             :eyebrow="selectedOpening ? 'OPENING' : selectedRoom ? 'ROOM' : 'OVERVIEW'"
             :title="selectedOpening ? '门窗属性' : selectedRoom ? '房间属性' : '图纸概览'"
             :subtitle="
@@ -771,7 +794,7 @@ async function exportSvg() {
                       : '整张图纸的尺寸与图例'
             "
             :width="304"
-            @close="card = 'none'"
+            @close="detail = false"
         >
             <template v-if="selectedRoom && selectedOpening">
                 <div class="property-section">

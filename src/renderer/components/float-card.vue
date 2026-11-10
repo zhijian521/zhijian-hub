@@ -1,9 +1,12 @@
 <script setup lang="ts">
 /*============================================================================
-  FloatCard — 右侧悬浮卡片
+  FloatCard — 悬浮卡片
 
-  界面里所有「详情 / 编辑」都长这个样子：从右侧浮起来、盖在画板上，
-  不挤压画布，也不占固定列。卡片自己滚动，画板永远保持原尺寸。
+  界面里所有「列表 / 详情 / 编辑」都长这个样子：浮在画板上，不挤压画布，
+  也不占固定列。卡片自己滚动，画板永远保持原尺寸。
+
+  side 决定从哪一侧浮起来：左侧卡片贴左（在左侧菜单右边），
+  右侧卡片贴右（在右侧按钮列左边）。两侧可以同时各开一张。
 ============================================================================*/
 
 import PlanIcon from '@/features/floor-plan/plan-icon.vue';
@@ -14,15 +17,22 @@ withDefaults(
         subtitle?: string;
         eyebrow?: string;
         width?: number;
+        side?: 'left' | 'right';
     }>(),
-    { subtitle: '', eyebrow: '', width: 300 },
+    { subtitle: '', eyebrow: '', width: 300, side: 'right' },
 );
 
 defineEmits<{ close: [] }>();
 </script>
 
 <template>
-    <section class="float-card" :style="{ width: `${width}px` }" role="dialog" :aria-label="title">
+    <section
+        class="float-card"
+        :class="`side-${side}`"
+        :style="{ width: `${width}px` }"
+        role="dialog"
+        :aria-label="title"
+    >
         <header class="card-head">
             <div>
                 <p v-if="eyebrow" class="card-eyebrow">{{ eyebrow }}</p>
@@ -46,7 +56,6 @@ defineEmits<{ close: [] }>();
 .float-card {
     position: absolute;
     top: 74px;
-    right: 86px;
     z-index: 30;
     display: flex;
     flex-direction: column;
@@ -57,6 +66,17 @@ defineEmits<{ close: [] }>();
     box-shadow: var(--shadow-lg);
     backdrop-filter: blur(14px) saturate(1.1);
     overflow: hidden;
+}
+
+/* 右侧卡片让开功能按钮列（右 16px + 宽 60px）。 */
+.float-card.side-right {
+    right: 86px;
+}
+
+/* 左侧卡片让开左侧菜单列，底部再给视图开关与比例尺留出位置。 */
+.float-card.side-left {
+    left: 86px;
+    max-height: calc(100% - 190px);
 }
 
 .card-head {
