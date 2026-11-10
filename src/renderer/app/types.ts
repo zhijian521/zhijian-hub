@@ -36,10 +36,21 @@ export type OpeningKind = 'door' | 'window';
 export type HingeSide = 'start' | 'end';
 
 /**
- * 地面材质。前三个能按房间名自动推断，后三个只能手动指定
- * （大理石、水磨石、地毯都不是能从「用途」唯一推出来的选择）。
+ * 地面材质。`wood` / `tile` / `small` 可由房间名自动推断，
+ * 其余（深浅木、斜铺、长条砖、大理石、水磨石、微水泥、地毯）都只能手动指定。
+ * 新增材质要同时改 store 的 FLOORS、这里、plan-drawing 的 pattern 与色卡样式。
  */
-export type FloorMaterial = 'wood' | 'tile' | 'small' | 'marble' | 'terrazzo' | 'carpet';
+export type FloorMaterial =
+    | 'wood'
+    | 'walnut'
+    | 'diagonal'
+    | 'tile'
+    | 'subway'
+    | 'small'
+    | 'marble'
+    | 'terrazzo'
+    | 'microcement'
+    | 'carpet';
 
 /**
  * 墙上的门窗洞。位置用「沿墙起点 + 宽度」表示，房间移动或缩放时自动跟随。

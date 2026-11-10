@@ -21,10 +21,21 @@ const WALLS = new Set(['top', 'right', 'bottom', 'left']);
 const KINDS = new Set(['door', 'window']);
 
 /** 地面材质。NULL 表示按房间名自动推断。
- * 前三个（wood / tile / small）能按房间名推断，后三个只能手动指定。
+ * 只有 wood / tile / small 能按房间名推断，其余都只能手动指定。
  * 新增材质必须同时改 src/renderer/app/types.ts 的 FloorMaterial
  * 与 plan-drawing.vue 里对应的 pattern。 */
-const FLOORS = new Set(['wood', 'tile', 'small', 'marble', 'terrazzo', 'carpet']);
+const FLOORS = new Set([
+    'wood',
+    'walnut',
+    'diagonal',
+    'tile',
+    'subway',
+    'small',
+    'marble',
+    'terrazzo',
+    'microcement',
+    'carpet',
+]);
 
 /** 门窗最小宽度 24px ≈ 40cm，再窄就不是洞而是一道缝。 */
 const MIN_OPENING_WIDTH = 24;

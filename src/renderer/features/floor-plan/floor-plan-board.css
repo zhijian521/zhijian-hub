@@ -688,9 +688,10 @@ input[type='checkbox'] {
     line-height: 1.9;
     color: var(--fg-subtle);
 }
+/* 十种材质按两列排，正好五整行；三列会剩一个孤零零的格子。 */
 .material-options {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 7px;
 }
 .material-options button {
@@ -712,47 +713,71 @@ input[type='checkbox'] {
     border-radius: 2px;
     margin-bottom: 6px;
 }
-/* 色卡与图纸里的 pattern 用同一组颜色，选中什么就能直接预期画布上是什么 */
+/* 色卡尽量复刻图纸里的 pattern：同一组颜色与同一套比例，
+   选之前就能预期画布上会是什么样。 */
 .material-swatch.wood {
-    background-color: #f0e7d8;
+    background-color: #f0e6d4;
     background-image:
-        repeating-linear-gradient(0deg, #dbcab2 0 1px, transparent 1px 9px),
-        repeating-linear-gradient(90deg, #e2d4bf 0 1px, transparent 1px 30px);
+        repeating-linear-gradient(0deg, #d8c4a6 0 1px, transparent 1px 8px),
+        repeating-linear-gradient(90deg, #ddc9ac 0 1px, transparent 1px 22px);
+}
+.material-swatch.walnut {
+    background-color: #bfa07c;
+    background-image:
+        repeating-linear-gradient(0deg, #a3835f 0 1px, transparent 1px 8px),
+        repeating-linear-gradient(90deg, #a98a66 0 1px, transparent 1px 22px);
+}
+.material-swatch.diagonal {
+    background-color: #f0e6d4;
+    background-image: repeating-linear-gradient(-40deg, #d8c4a6 0 1px, transparent 1px 8px);
 }
 .material-swatch.tile {
-    background-color: #f6f5ef;
+    background-color: #f4f3ec;
     background-image:
-        linear-gradient(#dcdcd2 1px, transparent 1px),
-        linear-gradient(90deg, #dcdcd2 1px, transparent 1px);
+        linear-gradient(#d9d8cd 1px, transparent 1px),
+        linear-gradient(90deg, #d9d8cd 1px, transparent 1px);
     background-size: 12px 12px;
 }
-.material-swatch.small {
-    background-color: #eef4f0;
+.material-swatch.subway {
+    background-color: #f6f5ef;
     background-image:
-        linear-gradient(#d2ddd5 1px, transparent 1px),
-        linear-gradient(90deg, #d2ddd5 1px, transparent 1px);
+        linear-gradient(#dbd9cd 1px, transparent 1px),
+        linear-gradient(90deg, #dbd9cd 1px, transparent 1px);
+    background-size: 18px 9px;
+}
+.material-swatch.small {
+    background-color: #eef4f1;
+    background-image:
+        linear-gradient(#cfdcd4 1px, transparent 1px),
+        linear-gradient(90deg, #cfdcd4 1px, transparent 1px);
     background-size: 6px 6px;
 }
 .material-swatch.marble {
-    background-color: #f8f8f5;
+    background-color: #f9f9f6;
     background-image:
-        linear-gradient(115deg, transparent 46%, #e2e3dc 48%, transparent 51%),
-        linear-gradient(200deg, transparent 62%, #e9eae3 64%, transparent 67%);
+        linear-gradient(115deg, transparent 46%, #e3e4dd 48%, transparent 51%),
+        linear-gradient(200deg, transparent 62%, #ecede7 64%, transparent 67%);
 }
 .material-swatch.terrazzo {
     background-color: #f4f3ee;
     background-image:
-        radial-gradient(circle at 20% 30%, #d8d3c6 1.2px, transparent 1.6px),
-        radial-gradient(circle at 62% 14%, #c9c3b2 1px, transparent 1.4px),
-        radial-gradient(circle at 78% 68%, #d8d3c6 1.4px, transparent 1.8px),
-        radial-gradient(circle at 38% 82%, #c9c3b2 0.9px, transparent 1.3px);
+        radial-gradient(circle at 20% 30%, #d5d0c2 1.2px, transparent 1.6px),
+        radial-gradient(circle at 62% 14%, #c6c0ae 1px, transparent 1.4px),
+        radial-gradient(circle at 78% 68%, #d5d0c2 1.4px, transparent 1.8px),
+        radial-gradient(circle at 38% 82%, #c6c0ae 0.9px, transparent 1.3px);
     background-size: 12px 12px;
 }
-.material-swatch.carpet {
-    background-color: #f0efe9;
+.material-swatch.microcement {
+    background-color: #eceae3;
     background-image:
-        repeating-linear-gradient(45deg, #e2e0d7 0 1px, transparent 1px 4px),
-        repeating-linear-gradient(-45deg, #e2e0d7 0 1px, transparent 1px 4px);
+        radial-gradient(ellipse at 30% 25%, #f3f1eb 0%, transparent 60%),
+        radial-gradient(ellipse at 75% 75%, #e4e1d8 0%, transparent 55%);
+}
+.material-swatch.carpet {
+    background-color: #efece4;
+    background-image:
+        repeating-linear-gradient(45deg, #dfdcd1 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(-45deg, #dfdcd1 0 1px, transparent 1px 4px);
 }
 .opening-list {
     display: flex;

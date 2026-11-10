@@ -777,11 +777,15 @@ async function exportSvg() {
                     <div class="material-options">
                         <button
                             v-for="material in [
-                                { id: 'wood', label: '木地板' },
+                                { id: 'wood', label: '橡木地板' },
+                                { id: 'walnut', label: '胡桃木' },
+                                { id: 'diagonal', label: '斜铺木' },
                                 { id: 'tile', label: '大砖' },
+                                { id: 'subway', label: '长条砖' },
                                 { id: 'small', label: '小方砖' },
                                 { id: 'marble', label: '大理石' },
                                 { id: 'terrazzo', label: '水磨石' },
+                                { id: 'microcement', label: '微水泥' },
                                 { id: 'carpet', label: '地毯' },
                             ] as const"
                             :key="material.id"
@@ -797,7 +801,7 @@ async function exportSvg() {
                         </button>
                     </div>
                     <p class="field-help">
-                        前三种会按房间名自动推断（卧室木地板、厨卫小砖、其余大砖），手动选过之后不再跟随改名。
+                        橡木地板、大砖、小方砖会按房间名自动推断；手动选过之后不再跟随改名。
                     </p>
                 </div>
                 <div class="property-section">
