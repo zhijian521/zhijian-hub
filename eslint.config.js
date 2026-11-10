@@ -12,7 +12,14 @@ import tseslint from 'typescript-eslint';
  */
 export default tseslint.config(
     {
-        ignores: ['dist/**', 'release/**', 'node_modules/**', '.workbuddy/**'],
+        ignores: [
+            'dist/**',
+            'release/**',
+            'node_modules/**',
+            '.workbuddy/**',
+            // 本地临时探针与截图，不属于源码（已在 .gitignore 中排除）
+            '.runtime/**',
+        ],
     },
     js.configs.recommended,
     {

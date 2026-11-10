@@ -6,6 +6,9 @@
 ============================================================================*/
 
 :root {
+    --draft-paper: #f7f8f5;
+    --draft-grid: #e7ebe4;
+    --draft-dot: #d3dcd0;
     /*== 背景层：由外到内 4 级 ==*/
     --bg: #f1f4ea; /* 页面与画布底（苔底） */
     --surface: #fbfdf6; /* 面板、标题栏（苔面） */
@@ -49,9 +52,33 @@
     --shadow-lg: 0 16px 40px rgba(40, 55, 25, 0.2);
     --focus-ring: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
 
+    /*== 户型图：墙体、地面、门窗 ==
+       墙体是实心深色块，地面按房间用途铺材质 —— 相邻房间共用同一堵墙。 */
+    --wall: #3c4630; /* 墙体：深墨绿，有实体感但不死黑 */
+    --floor: #fdfef9; /* 地面兜底色 */
+    --floor-active: #eef4e2; /* 选中房间的地面罩色 */
+    --floor-label: #2c3624; /* 房间名 */
+    --floor-meta: #65725a; /* 面积、尺寸 */
+    --ruler: #7a876a; /* 比例尺与辅助线 */
+
+    /*-- 地面材质：木地板 / 大砖 / 小砖 --*/
+    --floor-wood: #ddc49d;
+    --floor-wood-line: #c9ac7f;
+    --floor-tile: #f6f3e9;
+    --floor-tile-line: #d9d3c0;
+    --floor-small: #eef1e8;
+    --floor-small-line: #d7dbcc;
+
+    /*-- 门窗 --*/
+    --opening-gap: #fbfcf6; /* 洞口露出的底色 */
+    --door-leaf: #46523a; /* 门扇线 */
+    --door-arc: #6a7758; /* 开启弧线 */
+    --window-fill: #ffffff; /* 窗洞底色 */
+    --window-line: #6c7860; /* 窗棂线 */
+
     /*== 空间对象：靠材质区分，不靠颜色编码 ==*/
-    --room-fill: rgba(63, 90, 42, 0.05);
-    --room-line: rgba(63, 90, 42, 0.32);
+    --room-fill: rgba(63, 90, 42, 0.075);
+    --room-line: rgba(63, 90, 42, 0.36);
     /* 与正文色混合：亮底变深、暗底自动提亮，一套写法通吃 */
     --room-name: color-mix(in srgb, var(--brand) 72%, var(--fg));
     --fur-fill: #e8dcbf; /* 温润木色 */

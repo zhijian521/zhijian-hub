@@ -11,6 +11,7 @@
 
 import { onMounted, onUnmounted, ref } from 'vue';
 
+import FloorPlanBoard from '@/features/floor-plan/floor-plan-board.vue';
 import type { WindowAction } from '@/app/types';
 
 const maximized = ref(false);
@@ -91,8 +92,10 @@ async function control(action: WindowAction) {
             </div>
         </header>
 
-        <!--== 画板：点阵底，铺满剩余空间 ==-->
-        <main class="board" role="main" aria-label="画板"></main>
+        <!--== 画板：铺满标题栏以下的全部空间 ==-->
+        <main class="workspace" role="main" aria-label="画板">
+            <FloorPlanBoard />
+        </main>
     </div>
 </template>
 
@@ -196,18 +199,10 @@ async function control(action: WindowAction) {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-/*== 画板 ==*/
-.board {
+/*== 画板容器 ==*/
+.workspace {
     position: relative;
     overflow: hidden;
-    background-color: var(--bg);
-    /* 点阵压到 72% 不透明度：整屏满铺时，实色点会显得吵 */
-    background-image: radial-gradient(
-        circle,
-        color-mix(in srgb, var(--line) 72%, transparent) 1px,
-        transparent 1px
-    );
-    background-size: var(--grid-size) var(--grid-size);
-    background-position: -1px -1px;
+    background: var(--bg);
 }
 </style>

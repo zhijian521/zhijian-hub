@@ -24,6 +24,13 @@ const api = {
         ipcRenderer.on('zhijian:windowStateChanged', handler);
         return () => ipcRenderer.removeListener('zhijian:windowStateChanged', handler);
     },
+
+    loadFloorPlan: () => ipcRenderer.invoke('zhijian:floorPlan:load'),
+    /** @param {string} svg @param {string} name */
+    exportFloorPlan: (svg, name) => ipcRenderer.invoke('zhijian:floorPlan:export', svg, name),
+
+    /** @param {object} command 语义化命令，结构见 renderer/app/types.ts 的 FloorPlanCommand */
+    mutateFloorPlan: (command) => ipcRenderer.invoke('zhijian:floorPlan:mutate', command),
 };
 
 contextBridge.exposeInMainWorld('zhijian', api);

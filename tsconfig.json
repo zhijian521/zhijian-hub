@@ -9,6 +9,7 @@
         "checkJs": false,
         "skipLibCheck": true,
         "noEmit": true,
+        "allowImportingTsExtensions": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "esModuleInterop": true,

@@ -1,0 +1,34 @@
+<script setup lang="ts">
+defineProps<{ name: string }>();
+const paths: Record<string, string> = {
+    select: 'M5 3l14 9-7 1-3 7z',
+    room: 'M4 9V4h5m6 0h5v5m0 6v5h-5M9 20H4v-5M4 12h16M12 4v16',
+    door: 'M4 20V4h13v16M4 20h16M7 17V7l7-3v16l-7-3zm4-5h.01',
+    window: 'M3 5h18v14H3zM3 9h18M3 15h18M12 5v14',
+    hand: 'M8 12V6a2 2 0 0 1 4 0v5-7a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8c0 4-2 6-6 6h-2c-2 0-3-1-4-3l-4-6a2 2 0 0 1 3-2l1 2',
+    undo: 'M9 5L4 10l5 5M4 10h10a6 6 0 0 1 6 6v3',
+    redo: 'M15 5l5 5-5 5m5-5H10a6 6 0 0 0-6 6v3',
+    fit: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 8h8v8H8z',
+    export: 'M12 15V3m-4 4l4-4 4 4M4 14v6h16v-6',
+    plus: 'M12 5v14M5 12h14',
+    minus: 'M5 12h14',
+    trash: 'M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7',
+    home: 'M3 11l9-8 9 8M5 9v12h14V9M10 21v-7h4v7',
+    chevron: 'M9 5l7 7-7 7',
+    check: 'M5 12l4 4L19 6',
+    grid: 'M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z',
+};
+</script>
+<template>
+    <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+    >
+        <path :d="paths[name] || paths.home" />
+    </svg>
+</template>

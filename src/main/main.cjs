@@ -130,7 +130,7 @@ if (!app.requestSingleInstanceLock()) {
         database = openDatabase(paths.database);
         logger.info(`数据库已就绪：${paths.database}`);
 
-        registerIpc({ ipcMain, app, getWindow: () => window });
+        registerIpc({ ipcMain, app, db: database, getWindow: () => window });
         createWindow();
 
         app.on('activate', () => {
