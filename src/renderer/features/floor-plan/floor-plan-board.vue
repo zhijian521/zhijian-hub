@@ -778,8 +778,11 @@ async function exportSvg() {
                         <button
                             v-for="material in [
                                 { id: 'wood', label: '木地板' },
-                                { id: 'tile', label: '地砖' },
+                                { id: 'tile', label: '大砖' },
                                 { id: 'small', label: '小方砖' },
+                                { id: 'marble', label: '大理石' },
+                                { id: 'terrazzo', label: '水磨石' },
+                                { id: 'carpet', label: '地毯' },
                             ] as const"
                             :key="material.id"
                             :class="{ chosen: resolveFloor(selectedRoom) === material.id }"
@@ -793,6 +796,9 @@ async function exportSvg() {
                             {{ material.label }}
                         </button>
                     </div>
+                    <p class="field-help">
+                        前三种会按房间名自动推断（卧室木地板、厨卫小砖、其余大砖），手动选过之后不再跟随改名。
+                    </p>
                 </div>
                 <div class="property-section">
                     <h4>

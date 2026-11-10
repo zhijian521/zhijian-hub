@@ -35,8 +35,11 @@ export type OpeningKind = 'door' | 'window';
 /** 门的铰链在哪一端，决定门扇朝哪边开。 */
 export type HingeSide = 'start' | 'end';
 
-/** 地面材质：木地板 / 大砖 / 小砖。 */
-export type FloorMaterial = 'wood' | 'tile' | 'small';
+/**
+ * 地面材质。前三个能按房间名自动推断，后三个只能手动指定
+ * （大理石、水磨石、地毯都不是能从「用途」唯一推出来的选择）。
+ */
+export type FloorMaterial = 'wood' | 'tile' | 'small' | 'marble' | 'terrazzo' | 'carpet';
 
 /**
  * 墙上的门窗洞。位置用「沿墙起点 + 宽度」表示，房间移动或缩放时自动跟随。

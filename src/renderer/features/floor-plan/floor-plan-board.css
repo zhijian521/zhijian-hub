@@ -689,7 +689,8 @@ input[type='checkbox'] {
     color: var(--fg-subtle);
 }
 .material-options {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 7px;
 }
 .material-options button {
@@ -711,22 +712,47 @@ input[type='checkbox'] {
     border-radius: 2px;
     margin-bottom: 6px;
 }
+/* 色卡与图纸里的 pattern 用同一组颜色，选中什么就能直接预期画布上是什么 */
 .material-swatch.wood {
-    background: repeating-linear-gradient(0deg, #ede4d5, #ede4d5 7px, #d8ccba 8px);
+    background-color: #f0e7d8;
+    background-image:
+        repeating-linear-gradient(0deg, #dbcab2 0 1px, transparent 1px 9px),
+        repeating-linear-gradient(90deg, #e2d4bf 0 1px, transparent 1px 30px);
 }
 .material-swatch.tile {
-    background-color: #f2f2ed;
+    background-color: #f6f5ef;
     background-image:
-        linear-gradient(#dce1d7 1px, transparent 1px),
-        linear-gradient(90deg, #dce1d7 1px, transparent 1px);
-    background-size: 15px 15px;
+        linear-gradient(#dcdcd2 1px, transparent 1px),
+        linear-gradient(90deg, #dcdcd2 1px, transparent 1px);
+    background-size: 12px 12px;
 }
 .material-swatch.small {
-    background-color: #eaf0ec;
+    background-color: #eef4f0;
     background-image:
-        linear-gradient(#d4ded6 1px, transparent 1px),
-        linear-gradient(90deg, #d4ded6 1px, transparent 1px);
-    background-size: 7px 7px;
+        linear-gradient(#d2ddd5 1px, transparent 1px),
+        linear-gradient(90deg, #d2ddd5 1px, transparent 1px);
+    background-size: 6px 6px;
+}
+.material-swatch.marble {
+    background-color: #f8f8f5;
+    background-image:
+        linear-gradient(115deg, transparent 46%, #e2e3dc 48%, transparent 51%),
+        linear-gradient(200deg, transparent 62%, #e9eae3 64%, transparent 67%);
+}
+.material-swatch.terrazzo {
+    background-color: #f4f3ee;
+    background-image:
+        radial-gradient(circle at 20% 30%, #d8d3c6 1.2px, transparent 1.6px),
+        radial-gradient(circle at 62% 14%, #c9c3b2 1px, transparent 1.4px),
+        radial-gradient(circle at 78% 68%, #d8d3c6 1.4px, transparent 1.8px),
+        radial-gradient(circle at 38% 82%, #c9c3b2 0.9px, transparent 1.3px);
+    background-size: 12px 12px;
+}
+.material-swatch.carpet {
+    background-color: #f0efe9;
+    background-image:
+        repeating-linear-gradient(45deg, #e2e0d7 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(-45deg, #e2e0d7 0 1px, transparent 1px 4px);
 }
 .opening-list {
     display: flex;

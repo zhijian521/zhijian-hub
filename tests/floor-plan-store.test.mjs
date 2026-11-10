@@ -465,11 +465,20 @@ describe('floor-plan-store · 门窗编辑与地面材质', () => {
         db.close();
     });
 
+    it('接受只能手动指定的材质（大理石 / 水磨石 / 地毯）', () => {
+        const { db, run, room } = setup();
+
+        for (const floor of ['marble', 'terrazzo', 'carpet']) {
+            assert.equal(run({ type: 'set-room-floor', id: room.id, floor }).rooms[0].floor, floor);
+        }
+        db.close();
+    });
+
     it('拒绝非法地面材质', () => {
         const { db, run, room } = setup();
 
         assert.throws(
-            () => run({ type: 'set-room-floor', id: room.id, floor: 'marble' }),
+            () => run({ type: 'set-room-floor', id: room.id, floor: 'granite' }),
             /地面材质无效/,
         );
         db.close();
