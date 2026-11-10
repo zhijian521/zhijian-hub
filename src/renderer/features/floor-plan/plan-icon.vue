@@ -17,6 +17,10 @@ const paths: Record<string, string> = {
     chevron: 'M9 5l7 7-7 7',
     check: 'M5 12l4 4L19 6',
     grid: 'M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z',
+    search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm4.8 11.8L21 21',
+    close: 'M6 6l12 12M18 6L6 18',
+    box: 'M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8',
+    tag: 'M3 12V4h8l9 9-8 8zM7 8h.01',
 };
 </script>
 <template>

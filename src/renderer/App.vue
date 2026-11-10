@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /*============================================================================
-  App — 自绘标题栏 + 全幅画板
+  App — 全幅画板 + 悬浮窗口控件
 
   窗口去掉系统边框（main.cjs 中 frame: false），最小化 / 最大化 / 关闭
   由这里的三个按钮通过 IPC 回调主进程执行。
 
-  主页只有画板：除标题栏外不放任何常驻面板，画布铺满剩余空间，
-  后续的房间、家具、储物设备都直接落在这层点阵上。
+  这里没有标题栏这一行：品牌的印章与窗口按钮都浮在画板之上，
+  画布从窗口左上角一直铺到右下角。可拖拽区域只留品牌那一小块，
+  中间与下方全部交还给画布，避免拖拽区吃掉绘图事件。
 ============================================================================*/
 
 import { onMounted, onUnmounted, ref } from 'vue';
@@ -42,10 +43,17 @@ async function control(action: WindowAction) {
 
 <template>
     <div class="app">
-        <!--== 自绘标题栏：整条可拖拽，按钮区域排除 ==-->
-        <header class="titlebar">
-            <span class="seal" aria-hidden="true">简</span>
-            <h1 class="title">知简 Hub</h1>
+        <!--== 画板：铺满整个窗口，不预留任何标题栏高度 ==-->
+        <main class="workspace" role="main" aria-label="画板">
+            <FloorPlanBoard />
+        </main>
+
+        <!--== 悬浮件：品牌（可拖拽）+ 窗口按钮 ==-->
+        <header class="chrome">
+            <div class="brand">
+                <span class="seal" aria-hidden="true">简</span>
+                <h1 class="title">知简 Hub</h1>
+            </div>
 
             <div class="windowControls">
                 <button
@@ -91,36 +99,51 @@ async function control(action: WindowAction) {
                 </button>
             </div>
         </header>
-
-        <!--== 画板：铺满标题栏以下的全部空间 ==-->
-        <main class="workspace" role="main" aria-label="画板">
-            <FloorPlanBoard />
-        </main>
     </div>
 </template>
 
 <style scoped>
 .app {
-    display: grid;
-    grid-template-rows: var(--titlebar-height) 1fr;
+    position: relative;
     height: 100%;
-    background: var(--bg);
+    background: var(--draft-paper);
+    overflow: hidden;
 }
 
-/*== 标题栏 ==*/
-.titlebar {
+/*== 画板：真正铺满整个窗口 ==*/
+.workspace {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+/*== 悬浮 chrome：只有两个小岛接收鼠标，中间留白给画布 ==*/
+.chrome {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 9px 10px 0 12px;
+    /* 一条空白条本身不接收事件，只有子元素的小岛接 */
+    pointer-events: none;
+}
+
+/* 品牌小岛：整块作为窗口拖拽把手 */
+.brand {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    padding: 0 6px 0 12px;
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--surface) 94%, #fff 6%),
-        var(--surface)
-    );
-    border-bottom: 1px solid var(--line);
-    box-shadow: inset 0 1px 0 var(--hi);
-    /* 整条标题栏可拖拽窗口；系统默认边框已关闭 */
+    padding: 4px 10px 4px 5px;
+    border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(10px) saturate(1.1);
+    pointer-events: auto;
     -webkit-app-region: drag;
 }
 
@@ -128,13 +151,13 @@ async function control(action: WindowAction) {
 .seal {
     display: grid;
     place-items: center;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 3px;
     background: var(--brand);
     color: var(--on-brand);
     font-family: var(--font-serif);
-    font-size: 11px;
+    font-size: 10px;
     line-height: 1;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
@@ -146,13 +169,14 @@ async function control(action: WindowAction) {
     font-weight: var(--weight-medium);
     letter-spacing: 0.04em;
     color: var(--fg-muted);
+    white-space: nowrap;
 }
 
 /*== 窗口按钮 ==*/
 .windowControls {
     display: flex;
     gap: 2px;
-    margin-left: auto;
+    pointer-events: auto;
     /* 拖拽区里按钮必须显式排除，否则点不动 */
     -webkit-app-region: no-drag;
 }
@@ -160,12 +184,12 @@ async function control(action: WindowAction) {
 .control {
     display: grid;
     place-items: center;
-    width: 38px;
-    height: 28px;
+    width: 34px;
+    height: 26px;
     padding: 0;
     border: 1px solid transparent;
-    border-radius: 5px;
-    background: transparent;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--surface-raised) 62%, transparent);
     color: var(--fg-muted);
     transition:
         background var(--transition),
@@ -183,7 +207,7 @@ async function control(action: WindowAction) {
 }
 
 .control:hover {
-    background: var(--sunken);
+    background: var(--surface-raised);
     color: var(--fg);
 }
 
@@ -197,12 +221,5 @@ async function control(action: WindowAction) {
     background: var(--danger);
     color: #fff;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-}
-
-/*== 画板容器 ==*/
-.workspace {
-    position: relative;
-    overflow: hidden;
-    background: var(--bg);
 }
 </style>
