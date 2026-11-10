@@ -5,13 +5,13 @@
   原生模块要按 Electron ABI 重新编译，多一套 MSVC 工具链依赖，收益为零。
 
   schema 版本记在 `PRAGMA user_version`，迁移按版本递进。
-  当前版本 3：户型图（单套）+ 房间 + 墙上的门窗 + 房间地面材质。
+  当前版本 4：在版本 3 之上加储物设备与物品（房间 → 储物设备 → 物品）。
 ============================================================================*/
 
 const { DatabaseSync } = require('node:sqlite');
 
 /** 当前 schema 版本。新增表或列时 +1，并在 MIGRATIONS 里补一段。 */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * 版本 1：户型图与房间。
@@ -75,6 +75,43 @@ CREATE INDEX IF NOT EXISTS idx_openings_room ON openings(room_id);
 const SCHEMA_V3 = `ALTER TABLE rooms ADD COLUMN floor TEXT;`;
 
 /**
+ * 版本 4：储物设备与物品。
+ *
+ * 层级是「房间 → 储物设备 → 物品」，但物品的 room_id 是必填的：
+ *   · 物品一定在某个房间里 —— 这是"搜到就能去拿到"的底线；
+ *   · storage_id 可空 —— 柜子拆了、物品先随手放在房间各处，仍然能定位到房间。
+ * 所以删储物设备用 ON DELETE SET NULL，物品留在原来的房间里，不会凭空消失。
+ *
+ * 物品分类在这里只是文本约束（枚举校验放 store 层，理由同版本 3 的 floor）。
+ * sort_order 保证列表顺序稳定，不依赖插入时间。
+ */
+const SCHEMA_V4 = `
+CREATE TABLE IF NOT EXISTS storage (
+    id          TEXT PRIMARY KEY,
+    room_id     TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    kind        TEXT NOT NULL CHECK (kind IN ('cabinet', 'shelf', 'box', 'furniture')),
+    sort_order  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_storage_room ON storage(room_id);
+
+CREATE TABLE IF NOT EXISTS items (
+    id          TEXT PRIMARY KEY,
+    room_id     TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    storage_id  TEXT REFERENCES storage(id) ON DELETE SET NULL,
+    name        TEXT NOT NULL,
+    category    TEXT NOT NULL,
+    quantity    INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    note        TEXT NOT NULL DEFAULT '',
+    sort_order  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_items_room ON items(room_id);
+CREATE INDEX IF NOT EXISTS idx_items_storage ON items(storage_id);
+`;
+
+/**
  * 迁移脚本按版本号顺序执行：`MIGRATIONS[n]` 把库从版本 n 升到 n + 1。
  * 只向前迁移，不写回退逻辑（回退靠备份文件）。
  * @type {Array<(db: import('node:sqlite').DatabaseSync) => void>}
@@ -83,6 +120,7 @@ const MIGRATIONS = [
     (db) => db.exec(SCHEMA_V1),
     (db) => db.exec(SCHEMA_V2),
     (db) => db.exec(SCHEMA_V3),
+    (db) => db.exec(SCHEMA_V4),
 ];
 
 /**

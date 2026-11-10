@@ -424,6 +424,148 @@ describe('floor-plan-store · 门窗与缩放', () => {
     });
 });
 
+describe('floor-plan-store · 储物设备与物品', () => {
+    /** 建一套最小户型：一间房 + 一个柜子。 */
+    function seed() {
+        const store = createStore();
+        store.run({ type: 'create-plan', name: '家' });
+        const room = store.run({ type: 'add-room', rect: { x: 0, y: 0, width: 240, height: 180 } })
+            .rooms[0];
+        const withStorage = store.run({
+            type: 'add-storage',
+            roomId: room.id,
+            name: '衣柜',
+            kind: 'cabinet',
+        });
+        return { ...store, room, storage: withStorage.storage[0] };
+    }
+
+    it('新增储物设备后能读回，类型非法则拒绝', () => {
+        const { db, run, read, room } = seed();
+        const state = read();
+        assert.equal(state.storage.length, 1);
+        assert.equal(state.storage[0].roomId, room.id);
+        assert.equal(state.storage[0].kind, 'cabinet');
+        assert.throws(
+            () => run({ type: 'add-storage', roomId: room.id, name: '奇怪的东西', kind: 'vault' }),
+            /类型无效/,
+        );
+        db.close();
+    });
+
+    it('登记物品默认数量为 1，数量必须是正整数', () => {
+        const { db, run, room, storage } = seed();
+        const state = run({
+            type: 'add-item',
+            roomId: room.id,
+            storageId: storage.id,
+            name: '被子',
+            category: '衣物',
+        });
+        assert.equal(state.items[0].quantity, 1);
+        assert.equal(state.items[0].storageId, storage.id);
+        for (const quantity of [0, -2, 1.5, '3']) {
+            assert.throws(
+                () =>
+                    run({
+                        type: 'add-item',
+                        roomId: room.id,
+                        name: '坏数量',
+                        category: '杂物',
+                        quantity,
+                    }),
+                /数量/,
+            );
+        }
+        db.close();
+    });
+
+    it('拒绝把物品放进别的房间的柜子', () => {
+        const { db, run, room, storage } = seed();
+        const other = run({ type: 'add-room', rect: { x: 400, y: 0, width: 240, height: 180 } })
+            .rooms[1];
+        assert.throws(
+            () =>
+                run({
+                    type: 'add-item',
+                    roomId: other.id,
+                    storageId: storage.id,
+                    name: '毛衣',
+                    category: '衣物',
+                }),
+            /不在所选房间/,
+        );
+        assert.equal(
+            run({ type: 'add-item', roomId: room.id, name: '钥匙', category: '杂物' }).items.length,
+            1,
+        );
+        db.close();
+    });
+
+    it('删掉柜子后物品留在原房间，只是不再挂在柜子上', () => {
+        const { db, run, room, storage } = seed();
+        run({
+            type: 'add-item',
+            roomId: room.id,
+            storageId: storage.id,
+            name: '被子',
+            category: '衣物',
+        });
+        const state = run({ type: 'remove-storage', id: storage.id });
+        assert.equal(state.storage.length, 0);
+        assert.equal(state.items.length, 1);
+        assert.equal(state.items[0].storageId, null);
+        assert.equal(state.items[0].roomId, room.id);
+        db.close();
+    });
+
+    it('删房间会连带删掉里面的柜子与物品', () => {
+        const { db, run, room, storage } = seed();
+        run({
+            type: 'add-item',
+            roomId: room.id,
+            storageId: storage.id,
+            name: '被子',
+            category: '衣物',
+        });
+        const state = run({ type: 'remove-room', id: room.id });
+        assert.deepEqual(state.storage, []);
+        assert.deepEqual(state.items, []);
+        db.close();
+    });
+
+    it('replace-rooms 能一次恢复三张表，坏数据整体回滚', () => {
+        const { db, run, read, room, storage } = seed();
+        const before = run({
+            type: 'add-item',
+            roomId: room.id,
+            storageId: storage.id,
+            name: '被子',
+            category: '衣物',
+        });
+        const snapshot = { rooms: before.rooms, storage: before.storage, items: before.items };
+
+        run({ type: 'remove-item', id: before.items[0].id });
+        run({ type: 'remove-storage', id: storage.id });
+        const restored = run({ type: 'replace-rooms', ...snapshot });
+        assert.equal(restored.items.length, 1);
+        assert.equal(restored.items[0].storageId, storage.id);
+
+        assert.throws(
+            () =>
+                run({
+                    type: 'replace-rooms',
+                    rooms: snapshot.rooms,
+                    storage: [{ ...snapshot.storage[0], kind: 'vault' }],
+                    items: snapshot.items,
+                }),
+            /类型无效/,
+        );
+        assert.deepEqual(read(), restored);
+        db.close();
+    });
+});
+
 describe('floor-plan-store · 门窗编辑与地面材质', () => {
     function setup() {
         const db = openDatabase(':memory:');

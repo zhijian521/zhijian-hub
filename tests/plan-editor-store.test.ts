@@ -31,6 +31,19 @@ describe('editor persistence and history', () => {
                     ],
                 },
             ],
+            // 撤销快照要连储物设备与物品一起还原，夹具里必须有这两张表。
+            storage: [{ id: 'st', roomId: 'a', name: '衣柜', kind: 'cabinet' as const }],
+            items: [
+                {
+                    id: 'i1',
+                    name: '被子',
+                    category: '衣物',
+                    quantity: 1,
+                    note: '',
+                    roomId: 'a',
+                    storageId: 'st',
+                },
+            ],
         };
         let fail = false;
         const oldWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -44,7 +57,11 @@ describe('editor persistence and history', () => {
                         if (fail) return { ok: false, message: '模拟磁盘写入失败' };
                         if (payload.type === 'resize-room')
                             saved.rooms[0] = { ...saved.rooms[0]!, ...payload.rect };
-                        if (payload.type === 'replace-rooms') saved.rooms = payload.rooms;
+                        if (payload.type === 'replace-rooms') {
+                            saved.rooms = payload.rooms;
+                            saved.storage = payload.storage ?? [];
+                            saved.items = payload.items ?? [];
+                        }
                         return { ok: true, state: structuredClone(saved) };
                     },
                 },
@@ -61,6 +78,8 @@ describe('editor persistence and history', () => {
             await store.undo();
             assert.equal(store.rooms[0]!.width, 216);
             assert.equal(store.rooms[0]!.openings[0]!.width, 54);
+            assert.equal(store.storage.length, 1, '撤销不会抹掉储物设备');
+            assert.equal(store.items[0]!.name, '被子', '撤销不会抹掉物品');
             assert.equal(store.canRedo, true);
             await store.redo();
             assert.equal(store.rooms[0]!.width, 210);

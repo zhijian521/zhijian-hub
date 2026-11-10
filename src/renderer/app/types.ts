@@ -80,15 +80,46 @@ export interface FloorPlan {
     createdAt: string;
 }
 
+/** 储物设备形态。只影响图标与配色，不影响归属关系。 */
+export type StorageKind = 'cabinet' | 'shelf' | 'box' | 'furniture';
+
+/**
+ * 储物设备：柜、架、箱、家具。一定挂在某个房间里。
+ * 图纸上按房间内的固定网格自动排布（见 lib/plan-storage.ts），不做自由拖拽——
+ * 这个应用要的是"东西在哪"，不是家具摆放模拟器。
+ */
+export interface StorageDevice {
+    id: string;
+    roomId: string;
+    name: string;
+    kind: StorageKind;
+}
+
+/**
+ * 物品。roomId 必有（保证搜到就能去拿），storageId 可空
+ * （拆掉柜子后物品仍在原房间，不会丢）。
+ */
+export interface StoredItem {
+    id: string;
+    name: string;
+    category: string;
+    quantity: number;
+    note: string;
+    roomId: string;
+    storageId: string | null;
+}
+
 export interface FloorPlanState {
     /*-- 尚未创建户型图时为 null，界面据此显示创建引导 --*/
     plan: FloorPlan | null;
     rooms: Room[];
+    storage: StorageDevice[];
+    items: StoredItem[];
 }
 
 /** 语义化命令：渲染层只说做什么，SQL 与校验留在主进程。 */
 export type FloorPlanCommand =
-    | { type: 'replace-rooms'; rooms: Room[] }
+    | { type: 'replace-rooms'; rooms: Room[]; storage?: StorageDevice[]; items?: StoredItem[] }
     | { type: 'create-plan'; name: string }
     | { type: 'add-room'; rect: Rect }
     | { type: 'rename-room'; id: string; name: string }
@@ -107,7 +138,29 @@ export type FloorPlanCommand =
       }
     | { type: 'update-opening'; id: string; pos?: number; width?: number; hinge?: HingeSide }
     | { type: 'remove-opening'; id: string }
-    | { type: 'set-room-floor'; id: string; floor: FloorMaterial | null };
+    | { type: 'set-room-floor'; id: string; floor: FloorMaterial | null }
+    | { type: 'add-storage'; roomId: string; name: string; kind: StorageKind }
+    | { type: 'rename-storage'; id: string; name: string }
+    | { type: 'remove-storage'; id: string }
+    | {
+          type: 'add-item';
+          roomId: string;
+          storageId?: string | null;
+          name: string;
+          category: string;
+          quantity?: number;
+          note?: string;
+      }
+    | {
+          type: 'update-item';
+          id: string;
+          name?: string;
+          category?: string;
+          quantity?: number;
+          note?: string;
+          storageId?: string | null;
+      }
+    | { type: 'remove-item'; id: string };
 
 export type MutateResult = { ok: true; state: FloorPlanState } | { ok: false; message: string };
 

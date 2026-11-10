@@ -15,6 +15,13 @@
     background: var(--draft-paper);
     color: var(--fg);
     font-size: 12px;
+
+    /* 储物设备（画布上的柜子）。纸面配色，压在户型图上仍然读得清，
+       但明显比墙体浅一档，不至于喧宾夺主。 */
+    --sto-fill: color-mix(in srgb, var(--brand) 7%, #fff);
+    --sto-fill-strong: color-mix(in srgb, var(--brand) 18%, #fff);
+    --sto-line: color-mix(in srgb, var(--brand) 34%, #fff);
+    --sto-text: color-mix(in srgb, var(--brand) 72%, #222);
 }
 
 button {
@@ -54,11 +61,15 @@ svg {
     outline: none;
 }
 
-/* 图纸角标与指北针压在画板上，纯装饰不接收事件。 */
+/* 图纸角标与指北针压在画板上，纯装饰不接收事件。
+   角标放左下：左上那一片从 50px 往下是菜单列（6 个按钮 ≈ 300px 高），
+   角标原来贴 left: 24 / top: 58，正好被压在按钮底下看不着。
+   左下这一列只有视图开关（bottom 22–85）和指北针（bottom 118–170），
+   角标落在 bottom 190 起，三者竖排互不遮挡。 */
 .sheet-label {
     position: absolute;
-    top: 58px;
     left: 24px;
+    bottom: 190px;
     display: flex;
     gap: 11px;
     align-items: center;
@@ -188,6 +199,69 @@ svg {
     letter-spacing: 0.6px;
 }
 
+/* 搜索结果：直接挂在搜索框下面，跟着搜索框一起浮。 */
+.search-results {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+    padding: 6px;
+    background: color-mix(in srgb, var(--surface-raised) 96%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(12px) saturate(1.15);
+}
+
+.search-hit {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 9px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--fg);
+    font-size: 12px;
+    text-align: left;
+}
+
+.search-hit:hover,
+.search-hit[aria-selected='true'] {
+    background: var(--brand-soft);
+    border-color: var(--line);
+    color: var(--brand);
+}
+
+.search-hit > svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: var(--fg-subtle);
+}
+
+.search-hit:hover > svg,
+.search-hit[aria-selected='true'] > svg {
+    color: var(--brand);
+}
+
+.hit-enter {
+    color: var(--fg-subtle);
+    font: 10px var(--font-mono);
+}
+
+.search-empty {
+    margin: 8px 0 0;
+    padding: 9px 12px;
+    background: color-mix(in srgb, var(--surface-raised) 96%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    color: var(--fg-subtle);
+    font-size: 11px;
+}
+
 /* 左侧菜单 / 右上图纸：同一种竖排按钮列，分居左右 */
 .float-rail {
     position: absolute;
@@ -239,6 +313,14 @@ svg {
     color: var(--brand);
 }
 
+/* 「修改」开关打开时用主色实底：这是唯一能让画布变成可编辑的入口，
+   得一眼看出「现在正在改，不是在看」。 */
+.float-rail button.editing:not(:disabled) {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: var(--on-brand);
+}
+
 .rail-divider {
     height: 1px;
     margin: 2px 4px;
@@ -262,6 +344,25 @@ svg {
     box-shadow: var(--shadow);
     backdrop-filter: blur(12px) saturate(1.15);
 }
+
+/* 浏览模式下工具栏不再是绘图工具，而是一条「现在只能看」的说明 + 入口。 */
+.browse-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px 6px 10px;
+    color: var(--fg-muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+
+.browse-hint > svg {
+    width: 16px;
+    height: 16px;
+    color: var(--fg-subtle);
+}
+
+/* 提示条不再带按钮：修改入口统一在左侧菜单的「修改」上。 */
 
 .tool-group {
     display: flex;
@@ -661,6 +762,34 @@ input[type='checkbox'] {
 
 .field-label input[type='number'] {
     font-family: var(--font-mono);
+}
+
+/* 只读概况：浏览模式下房间卡片就这么几行，不摆输入框也不摆删除键。 */
+.readonly-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    margin-bottom: 14px;
+}
+
+.readonly-facts > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg);
+}
+
+.readonly-facts span {
+    color: var(--fg-subtle);
+    font-size: 9.5px;
+}
+
+.readonly-facts b {
+    color: var(--fg);
+    font: 500 12px var(--font-mono);
 }
 
 .size-fields {
@@ -1140,6 +1269,14 @@ input[type='checkbox'] {
         max-width: calc(100% - 220px);
     }
 
+    .browse-hint > span {
+        display: none;
+    }
+
+    .browse-hint {
+        padding-left: 8px;
+    }
+
     .tool-button span {
         display: none;
     }
@@ -1170,4 +1307,110 @@ input[type='checkbox'] {
     .north-mark {
         display: none;
     }
+
+    /* 指北针收起了，角标补到它原来的位置附近，左边一列仍然不撞视图开关。 */
+    .sheet-label {
+        bottom: 112px;
+    }
+}
+
+/*------------------------------------------------------------------------------
+  画布上的储物设备
+------------------------------------------------------------------------------*/
+
+/* 设备是 SVG 里的小方块，不接收指针事件以外的交互；光标提示"可以点进去"。 */
+.storage-box {
+    cursor: pointer;
+}
+
+/* 储物层压在房间底色之上、文字之下；`pointer-events` 交给每个方块自己管，
+   层本身不能吃掉画布拖拽（否则空白处就拖不动了）。 */
+.storage-layer {
+    pointer-events: none;
+}
+
+.storage-layer .storage-box {
+    pointer-events: auto;
+}
+
+.storage-box text {
+    font-family: var(--font-sans);
+    letter-spacing: 0.2px;
+    user-select: none;
+}
+
+/*------------------------------------------------------------------------------
+  右侧「里面有什么」卡片
+------------------------------------------------------------------------------*/
+
+/* 清单撑满卡片剩余高度，超出部分在卡片内部滚动。 */
+.item-list {
+    min-height: 0;
+}
+
+/* 物品行：点一下就把视线挪到它所在的柜子 / 房间。 */
+.item-row.located {
+    background: var(--brand-soft);
+    border-color: var(--brand);
+}
+
+.item-count {
+    flex-shrink: 0;
+    min-width: 18px;
+    color: var(--fg-subtle);
+    font: 10px var(--font-mono);
+    text-align: right;
+}
+
+/* 行尾的小动作按钮（删除柜子 / 删除物品）：靠右，不抢主标题的位置。 */
+.row-action {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    color: var(--fg-subtle);
+}
+
+.row-action:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.row-action svg {
+    width: 13px;
+    height: 13px;
+}
+
+/* 修改模式里的两个小表单：加柜子、登记物品。和上面的清单留一条虚线分开，
+   免得「删除」按钮和「新增」按钮贴在一起被误点。 */
+.storage-form,
+.item-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+}
+
+.storage-form .chip-row,
+.item-form .chip-row {
+    flex-wrap: wrap;
+}
+
+.field-label select {
+    width: 100%;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-raised);
+    color: var(--fg);
+    font: inherit;
+    font-size: 11.5px;
+}
+
+.field-help.error {
+    color: var(--danger);
 }

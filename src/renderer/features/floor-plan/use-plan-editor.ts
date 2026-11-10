@@ -13,8 +13,25 @@ import {
 import { DOOR_WIDTH, MIN_ROOM_SIZE, WINDOW_WIDTH, useFloorPlanStore } from '@/stores/floor-plan';
 
 export type PlanTool = 'select' | 'room' | 'door' | 'window' | 'hand';
+
+/**
+ * 浏览模式是默认态：只能看和搜，拖动是平移，点一下只做选中。
+ * 改户型（画房间、挪墙、放门窗、删房间）必须先显式进入编辑模式，
+ * 这样"手滑拖了一下房间"就不会再发生。
+ */
+export type PlanMode = 'browse' | 'edit';
+
 type Drag =
-    | { kind: 'pan'; pointer: number; start: Point; x: number; y: number }
+    | {
+          kind: 'pan';
+          pointer: number;
+          start: Point;
+          x: number;
+          y: number;
+          /** 浏览模式下按下左键：抬起时若没拖动过，就把点到的房间选上 */
+          pick: boolean;
+          moved: boolean;
+      }
     | { kind: 'draw'; pointer: number; start: Point }
     | { kind: 'move' | 'resize'; pointer: number; start: Point; room: Room; dir?: ResizeDir }
     | { kind: 'opening'; pointer: number; start: Point; room: Room; opening: Opening };
@@ -23,6 +40,7 @@ export function usePlanEditor() {
     const store = useFloorPlanStore();
     const stage = ref<SVGSVGElement | null>(null);
     const tool = ref<PlanTool>('select');
+    const mode = ref<PlanMode>('browse');
     const zoom = ref(1);
     const pan = ref({ x: 130, y: 130 });
     const size = ref({ width: 800, height: 600 });
@@ -48,6 +66,20 @@ export function usePlanEditor() {
             !openingFits(draftRoom.value, draftRoom.value)
         );
     });
+    /** 浏览模式下鼠标压在哪个房间上：用来把边界描出来，让人知道这里能点。 */
+    const hoveredRoomId = computed(() => {
+        if (mode.value !== 'browse' || drag.value || !hover.value) return null;
+        const point = hover.value;
+        return (
+            store.rooms.find(
+                (room) =>
+                    point.x >= room.x &&
+                    point.x <= room.x + room.width &&
+                    point.y >= room.y &&
+                    point.y <= room.y + room.height,
+            )?.id ?? null
+        );
+    });
     const otherRooms = (id?: string) => store.rooms.filter((r) => r.id !== id);
     const snapped = (p: Point, id?: string): Point => ({
         x: snapCoordinate(p.x, 'x', otherRooms(id), 8 / zoom.value),
@@ -61,6 +93,7 @@ export function usePlanEditor() {
         };
     }
     const placement = computed(() => {
+        if (mode.value !== 'edit') return null;
         if (!hover.value || !['door', 'window'].includes(tool.value)) return null;
         let nearest: { room: Room; wall: Opening['wall']; along: number; distance: number } | null =
             null;
@@ -105,8 +138,57 @@ export function usePlanEditor() {
     function chooseTool(value: PlanTool) {
         cancel();
         tool.value = value;
+        // 选了绘图工具就等于宣布"我要改"，不用先专门点一次模式开关。
+        if (value !== 'select') mode.value = 'edit';
         message.value = '';
         void nextTick(() => stage.value?.focus({ preventScroll: true }));
+    }
+
+    /** 切换浏览 / 修改。离开编辑模式时收回工具与缩放柄，避免残留半截操作。 */
+    function setMode(value: PlanMode) {
+        if (mode.value === value) return;
+        cancel();
+        mode.value = value;
+        message.value = '';
+        if (value === 'browse') {
+            tool.value = 'select';
+            selectedOpeningId.value = null;
+        }
+        void nextTick(() => stage.value?.focus({ preventScroll: true }));
+    }
+
+    /** 命中画布上某个房间；浏览模式下用它把点击翻译成选中。 */
+    function roomAt(clientX: number, clientY: number): string | null {
+        const element = document.elementFromPoint(clientX, clientY);
+        const id = element?.closest('[data-room]')?.getAttribute('data-room') ?? null;
+        return id && store.rooms.some((room) => room.id === id) ? id : null;
+    }
+
+    /** 把某个房间移到视线中心：搜索命中与列表点击都走这里。 */
+    function focusRoom(id: string) {
+        const room = store.rooms.find((item) => item.id === id);
+        if (!room) return;
+        const viewport = { width: size.value.width, height: size.value.height };
+        const fits =
+            room.width * zoom.value < viewport.width - 360 &&
+            room.height * zoom.value < viewport.height - 300;
+        const nextZoom = fits
+            ? zoom.value
+            : Math.min(
+                  1.5,
+                  Math.max(
+                      0.2,
+                      Math.min(
+                          (viewport.width - 360) / room.width,
+                          (viewport.height - 300) / room.height,
+                      ),
+                  ),
+              );
+        zoom.value = nextZoom;
+        pan.value = {
+            x: viewport.width / 2 - (room.x + room.width / 2) * nextZoom,
+            y: viewport.height / 2 - (room.y + room.height / 2) * nextZoom,
+        };
     }
     function selectRoom(id: string | null) {
         store.select(id);
@@ -119,13 +201,17 @@ export function usePlanEditor() {
     function down(event: PointerEvent) {
         if (!store.hasPlan || (event.button !== 0 && event.button !== 1)) return;
         const p = local(event);
-        if (event.button === 1 || space.value || tool.value === 'hand') {
+        // 浏览模式：左键也只是平移（抬起时若没动过就当作一次点选）。
+        if (event.button === 1 || space.value || mode.value === 'browse' || tool.value === 'hand') {
             event.preventDefault();
             drag.value = {
                 kind: 'pan',
                 pointer: event.pointerId,
                 start: { x: event.clientX, y: event.clientY },
-                ...pan.value,
+                x: pan.value.x,
+                y: pan.value.y,
+                pick: mode.value === 'browse' && event.button === 0 && !space.value,
+                moved: false,
             };
             capture(event);
             return;
@@ -187,10 +273,10 @@ export function usePlanEditor() {
         const current = drag.value;
         if (!current || current.pointer !== event.pointerId) return;
         if (current.kind === 'pan') {
-            pan.value = {
-                x: current.x + event.clientX - current.start.x,
-                y: current.y + event.clientY - current.start.y,
-            };
+            const dx = event.clientX - current.start.x;
+            const dy = event.clientY - current.start.y;
+            if (Math.hypot(dx, dy) > 3) current.moved = true;
+            pan.value = { x: current.x + dx, y: current.y + dy };
             return;
         }
         if (current.kind === 'draw') {
@@ -265,6 +351,13 @@ export function usePlanEditor() {
     async function up(event: PointerEvent) {
         const current = drag.value;
         if (!current || current.pointer !== event.pointerId) return;
+        if (current.kind === 'pan') {
+            const clicked =
+                current.pick && !current.moved ? roomAt(event.clientX, event.clientY) : undefined;
+            cancel();
+            if (current.pick && !current.moved) selectRoom(clicked ?? null);
+            return;
+        }
         const rect = drawRect.value,
             draft = draftRoom.value,
             isInvalid = invalid.value;
@@ -337,6 +430,7 @@ export function usePlanEditor() {
         };
     }
     async function removeSelection() {
+        if (mode.value !== 'edit') return;
         if (selectedOpening.value) await store.removeOpening(selectedOpening.value.id);
         else if (selectedRoom.value) await store.removeRoom(selectedRoom.value.id);
         selectedOpeningId.value = null;
@@ -368,6 +462,19 @@ export function usePlanEditor() {
         if (event.code === 'Space') {
             event.preventDefault();
             space.value = true;
+        }
+        if (key === '0') fit();
+        if (key === 'e' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            setMode(mode.value === 'edit' ? 'browse' : 'edit');
+            return;
+        }
+        if (mode.value !== 'edit') {
+            // 浏览模式：除了平移、缩放和 Esc 清空选中，其余快捷键一律不生效。
+            if (key === 'escape') {
+                cancel();
+                selectRoom(null);
+            }
+            return;
         }
         if (event.ctrlKey || event.metaKey) {
             if (key === 'z' || key === 'y') {
@@ -428,6 +535,8 @@ export function usePlanEditor() {
         store,
         stage,
         tool,
+        mode,
+        hoveredRoomId,
         zoom,
         pan,
         size,
@@ -444,6 +553,8 @@ export function usePlanEditor() {
         drag,
         message,
         chooseTool,
+        setMode,
+        focusRoom,
         selectRoom,
         down,
         move,

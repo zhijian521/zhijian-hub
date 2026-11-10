@@ -9,6 +9,9 @@ import type {
     OpeningKind,
     Rect,
     Room,
+    StorageDevice,
+    StorageKind,
+    StoredItem,
     WallSide,
 } from '@/app/types';
 
@@ -24,6 +27,17 @@ export function roomArea(room: Pick<Room, 'width' | 'height'>): number {
     return Math.round((room.width * room.height) / 360) / 10;
 }
 const cloneRooms = (rooms: Room[]): Room[] => JSON.parse(JSON.stringify(rooms));
+/** 撤销栈要连储物设备与物品一起存，否则撤销一次房间改动会把期间新增的东西抹掉。 */
+const cloneStorage = (storage: StorageDevice[]): StorageDevice[] =>
+    JSON.parse(JSON.stringify(storage));
+const cloneItems = (items: StoredItem[]): StoredItem[] => JSON.parse(JSON.stringify(items));
+
+/** 一次撤销快照：三张表一起，缺一张就不是同一个时刻的画面。 */
+interface Snapshot {
+    rooms: Room[];
+    storage: StorageDevice[];
+    items: StoredItem[];
+}
 
 export const useFloorPlanStore = defineStore('floor-plan', () => {
     const plan = ref<FloorPlan | null>(null);
@@ -32,8 +46,10 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
     const busy = ref(false);
     const errorMessage = ref('');
     const selectedId = ref<string | null>(null);
-    const past = ref<Room[][]>([]);
-    const future = ref<Room[][]>([]);
+    const storage = ref<StorageDevice[]>([]);
+    const items = ref<StoredItem[]>([]);
+    const past = ref<Snapshot[]>([]);
+    const future = ref<Snapshot[]>([]);
     const hasPlan = computed(() => plan.value !== null);
     const selectedRoom = computed(() => rooms.value.find((r) => r.id === selectedId.value) ?? null);
     const canUndo = computed(() => past.value.length > 0 && !busy.value);
@@ -42,6 +58,10 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
     function apply(state: FloorPlanState) {
         plan.value = state.plan;
         rooms.value = state.rooms;
+        // 旧数据库升上来、或只关心房间的调用方，可能没带这两张表；
+        // 这里统一成空数组，撤销栈与列表渲染就不用各自防一手。
+        storage.value = state.storage ?? [];
+        items.value = state.items ?? [];
         if (!state.rooms.some((r) => r.id === selectedId.value)) selectedId.value = null;
     }
     async function load() {
@@ -59,7 +79,11 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
     async function run(command: FloorPlanCommand, history = true): Promise<boolean> {
         if (busy.value || !window.zhijian) return false;
         busy.value = true;
-        const before = cloneRooms(rooms.value);
+        const before: Snapshot = {
+            rooms: cloneRooms(rooms.value),
+            storage: cloneStorage(storage.value),
+            items: cloneItems(items.value),
+        };
         try {
             // Vue's reactive room/opening proxies cannot cross contextBridge's structured clone.
             const payload: FloorPlanCommand = JSON.parse(JSON.stringify(command));
@@ -68,11 +92,11 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
                 errorMessage.value = result.message;
                 return false;
             }
-            if (
-                history &&
-                command.type !== 'create-plan' &&
-                JSON.stringify(before) !== JSON.stringify(result.state.rooms)
-            ) {
+            const changed =
+                JSON.stringify(before.rooms) !== JSON.stringify(result.state.rooms) ||
+                JSON.stringify(before.storage) !== JSON.stringify(result.state.storage) ||
+                JSON.stringify(before.items) !== JSON.stringify(result.state.items);
+            if (history && command.type !== 'create-plan' && changed) {
                 past.value = [...past.value.slice(-49), before];
                 future.value = [];
             }
@@ -91,8 +115,18 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
         const target = direction === 'undo' ? future : past;
         const snapshot = source.value.at(-1);
         if (!snapshot || busy.value) return;
-        const current = cloneRooms(rooms.value);
-        if (await run({ type: 'replace-rooms', rooms: cloneRooms(snapshot) }, false)) {
+        const current: Snapshot = {
+            rooms: cloneRooms(rooms.value),
+            storage: cloneStorage(storage.value),
+            items: cloneItems(items.value),
+        };
+        const command: FloorPlanCommand = {
+            type: 'replace-rooms',
+            rooms: cloneRooms(snapshot.rooms),
+            storage: cloneStorage(snapshot.storage),
+            items: cloneItems(snapshot.items),
+        };
+        if (await run(command, false)) {
             source.value = source.value.slice(0, -1);
             target.value = [...target.value, current];
         }
@@ -123,7 +157,13 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
         },
         undo: () => travel('undo'),
         redo: () => travel('redo'),
-        replaceRooms: (value: Room[]) => run({ type: 'replace-rooms', rooms: cloneRooms(value) }),
+        replaceRooms: (value: Room[]) =>
+            run({
+                type: 'replace-rooms',
+                rooms: cloneRooms(value),
+                storage: cloneStorage(storage.value),
+                items: cloneItems(items.value),
+            }),
         createPlan: (name: string) => run({ type: 'create-plan', name }),
         renameRoom: (id: string, name: string) => run({ type: 'rename-room', id, name }),
         moveRoom: (id: string, x: number, y: number) => run({ type: 'move-room', id, x, y }),
@@ -141,5 +181,44 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
         updateOpening: (id: string, patch: { pos?: number; width?: number; hinge?: HingeSide }) =>
             run({ type: 'update-opening', id, ...patch }),
         removeOpening: (id: string) => run({ type: 'remove-opening', id }),
+
+        /*== 储物设备与物品 ==*/
+        storage,
+        items,
+        addStorage: (roomId: string, name: string, kind: StorageKind) =>
+            run({ type: 'add-storage', roomId, name, kind }),
+        renameStorage: (id: string, name: string) => run({ type: 'rename-storage', id, name }),
+        removeStorage: (id: string) => run({ type: 'remove-storage', id }),
+        addItem: (input: {
+            roomId: string;
+            storageId?: string | null;
+            name: string;
+            category: string;
+            quantity?: number;
+            note?: string;
+        }) => run({ type: 'add-item', ...input }),
+        updateItem: (
+            id: string,
+            patch: {
+                name?: string;
+                category?: string;
+                quantity?: number;
+                note?: string;
+                storageId?: string | null;
+            },
+        ) => run({ type: 'update-item', id, ...patch }),
+        removeItem: (id: string) => run({ type: 'remove-item', id }),
+
+        /**
+         * 一次性导入整套储物与物品（示例户型用）。
+         * 走 replace-rooms 这条已有的原子路径：房间原样带回，只换家具与物品。
+         */
+        importFurnishing: (nextStorage: StorageDevice[], nextItems: StoredItem[]) =>
+            run({
+                type: 'replace-rooms',
+                rooms: cloneRooms(rooms.value),
+                storage: cloneStorage(nextStorage),
+                items: cloneItems(nextItems),
+            }),
     };
 });

@@ -18,8 +18,12 @@ withDefaults(
         eyebrow?: string;
         width?: number;
         side?: 'left' | 'right';
+        /** 卡片顶边离画板顶部多少 px。默认 74；要和左侧菜单顶对齐就传 50。 */
+        top?: number;
+        /** 撑满可用高度（顶到顶边、底留 22px），让内部列表自己滚。 */
+        stretch?: boolean;
     }>(),
-    { subtitle: '', eyebrow: '', width: 300, side: 'right' },
+    { subtitle: '', eyebrow: '', width: 300, side: 'right', top: 74, stretch: false },
 );
 
 defineEmits<{ close: [] }>();
@@ -28,8 +32,8 @@ defineEmits<{ close: [] }>();
 <template>
     <section
         class="float-card"
-        :class="`side-${side}`"
-        :style="{ width: `${width}px` }"
+        :class="[`side-${side}`, { stretch }]"
+        :style="{ width: `${width}px`, top: `${top}px` }"
         role="dialog"
         :aria-label="title"
     >
@@ -77,6 +81,15 @@ defineEmits<{ close: [] }>();
 .float-card.side-left {
     left: 86px;
     max-height: calc(100% - 190px);
+}
+
+/* 撑满档：从卡片顶边一直落到画板底部，卡片本身不滚，
+   滚的是 .card-body —— 头部的名称与件数始终可见。
+   底部让出 74px：右下角那排缩放按钮（bottom 22 + 42 高）也在右边，
+   卡片直接落到 22px 会把它盖住。 */
+.float-card.stretch {
+    bottom: 74px;
+    max-height: none;
 }
 
 .card-head {

@@ -54,6 +54,42 @@ describe('openDatabase', () => {
         db.close();
     });
 
+    it('版本 3 的旧库能升到版本 4，房间数据不丢', () => {
+        const file = join(workdir, 'upgrade.db');
+
+        // 造一个"版本 3"的库：把版本 4 才有的两张表拆掉、把版本号退回去，
+        // 再正常打开一次，走的就是真实的 v3 → v4 迁移路径。
+        const old = openDatabase(file);
+        // 注意：node:sqlite 的 exec() 不接受参数，占位符会被忽略（插入 NULL → NOT NULL 报错）。
+        // 带参数一律走 prepare().run()。
+        old.prepare(
+            'INSERT INTO floor_plan (id, name, room_seq, created_at) VALUES (?, ?, ?, ?)',
+        ).run('singleton', '老家', 1, '2026-01-01');
+        old.prepare(
+            'INSERT INTO rooms (id, name, x, y, width, height, sort_order, floor) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        ).run('room-old', '主卧', 0, 0, 240, 180, 0, 'wood');
+        old.exec('DROP TABLE items');
+        old.exec('DROP TABLE storage');
+        old.exec('PRAGMA user_version = 3');
+        old.close();
+
+        const db = openDatabase(file);
+        assert.equal(Number(db.prepare('PRAGMA user_version').get().user_version), SCHEMA_VERSION);
+        assert.equal(
+            db.prepare('SELECT name FROM rooms WHERE id = ?').get('room-old').name,
+            '主卧',
+        );
+        const tables = db
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('storage', 'items')",
+            )
+            .all()
+            .map((row) => row.name)
+            .sort();
+        assert.deepEqual(tables, ['items', 'storage']);
+        db.close();
+    });
+
     it('拒绝版本高于程序的数据库', () => {
         const file = join(workdir, 'future.db');
 

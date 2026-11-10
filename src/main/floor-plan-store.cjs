@@ -37,6 +37,15 @@ const FLOORS = new Set([
     'carpet',
 ]);
 
+/** 储物设备的四种形态。只影响图标与画布排布，不影响归属关系。 */
+const STORAGE_KINDS = new Set(['cabinet', 'shelf', 'box', 'furniture']);
+
+/** 物品数量上限：再大就不是"记一下在哪"，而是进销存了。 */
+const MAX_QUANTITY = 9999;
+
+/** 物品备注上限。 */
+const MAX_NOTE_LENGTH = 200;
+
 /** 门窗最小宽度 24px ≈ 40cm，再窄就不是洞而是一道缝。 */
 const MIN_OPENING_WIDTH = 24;
 
@@ -74,9 +83,11 @@ function checkSharedOpenings(state) {
 }
 
 /** Atomic history/template restore. Validate every field before committing; never partially save a plan. */
-function replaceRooms(db, rawRooms) {
+function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
     if (!db.prepare('SELECT id FROM floor_plan').get()) fail('尚未创建户型图');
     if (!Array.isArray(rawRooms) || rawRooms.length > 500) fail('房间列表无效');
+    if (!Array.isArray(rawStorage) || rawStorage.length > 2000) fail('储物设备列表无效');
+    if (!Array.isArray(rawItems) || rawItems.length > 5000) fail('物品列表无效');
     db.exec('SAVEPOINT replace_rooms');
     try {
         db.exec('DELETE FROM rooms');
@@ -121,6 +132,54 @@ function replaceRooms(db, rawRooms) {
                 insertOpening.run(openingId, id, o.kind, o.wall, o.pos, o.width, o.hinge, index);
             });
         });
+        // 储物设备与物品跟在房间后面恢复：撤销一次房间改动时，
+        // 期间新增的柜子和物品不能因为 DELETE FROM rooms 的级联而消失。
+        const insertStorage = db.prepare(
+            'INSERT INTO storage (id, room_id, name, kind, sort_order) VALUES (?, ?, ?, ?, ?)',
+        );
+        const roomIds = new Set(ids);
+        const storageIds = new Set();
+        rawStorage.forEach((device, order) => {
+            if (!device || typeof device !== 'object') fail('储物设备无效');
+            const id = normalizeName(device.id, '储物设备 id');
+            if (storageIds.has(id)) fail('储物设备 id 重复');
+            storageIds.add(id);
+            if (!roomIds.has(device.roomId)) fail('储物设备所属房间不存在');
+            if (!STORAGE_KINDS.has(device.kind)) fail('储物设备类型无效');
+            insertStorage.run(
+                id,
+                device.roomId,
+                normalizeName(device.name, '储物设备名称'),
+                device.kind,
+                order,
+            );
+        });
+
+        const insertItem = db.prepare(
+            `INSERT INTO items (id, room_id, storage_id, name, category, quantity, note, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        );
+        const itemIds = new Set();
+        rawItems.forEach((item, order) => {
+            if (!item || typeof item !== 'object') fail('物品无效');
+            const id = normalizeName(item.id, '物品 id');
+            if (itemIds.has(id)) fail('物品 id 重复');
+            itemIds.add(id);
+            if (!roomIds.has(item.roomId)) fail('物品所属房间不存在');
+            const storageId = item.storageId ?? null;
+            if (storageId !== null && !storageIds.has(storageId)) fail('物品所属储物设备不存在');
+            insertItem.run(
+                id,
+                item.roomId,
+                storageId,
+                normalizeName(item.name, '物品名称'),
+                normalizeName(item.category, '物品分类'),
+                normalizeQuantity(item.quantity),
+                normalizeNote(item.note),
+                order,
+            );
+        });
+
         const state = loadState(db);
         checkSharedOpenings(state);
         // Sequences remain monotonic even after restoring an earlier drawing.
@@ -153,6 +212,43 @@ function normalizeName(value, label) {
     if (name.length === 0) fail(`${label}不能为空`);
     if (name.length > MAX_NAME_LENGTH) fail(`${label}不能超过 ${MAX_NAME_LENGTH} 个字符`);
     return name;
+}
+
+/**
+ * 生成主键。
+ *
+ * 早先写的是 `prefix-${Date.now()}-${Math.random() * 1e4}`：同一毫秒里连建两条
+ * 就只剩一万分之一的随机空间，实测在测试里真的撞出过
+ * `UNIQUE constraint failed: openings.id`。现在加上进程内自增序号，
+ * 同毫秒内必不重复；保留随机后缀是为了跨进程/重启也不易撞。
+ * @param {string} prefix
+ */
+let idSequence = 0;
+function makeId(prefix) {
+    idSequence = (idSequence + 1) % 1296;
+    const random = Math.floor(Math.random() * 1296)
+        .toString(36)
+        .padStart(2, '0');
+    return `${prefix}-${Date.now().toString(36)}-${idSequence.toString(36).padStart(2, '0')}${random}`;
+}
+
+/** 物品数量：正整数，缺省 1。只接受数字类型，避免 "3" 这种字符串被悄悄换算。 */
+function normalizeQuantity(value) {
+    if (value === undefined || value === null) return 1;
+    if (typeof value !== 'number' || !Number.isInteger(value)) {
+        fail(`物品数量必须是 1–${MAX_QUANTITY} 的整数`);
+    }
+    if (value < 1 || value > MAX_QUANTITY) fail(`物品数量必须是 1–${MAX_QUANTITY} 的整数`);
+    return value;
+}
+
+/** 物品备注：可空文本，超长截断没有意义，直接拒绝。 */
+function normalizeNote(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value !== 'string') fail('物品备注必须是文本');
+    const note = value.trim();
+    if (note.length > MAX_NOTE_LENGTH) fail(`物品备注不能超过 ${MAX_NOTE_LENGTH} 个字符`);
+    return note;
 }
 
 /**
@@ -215,6 +311,31 @@ function loadState(db) {
         byRoom.set(item.room_id, list);
     }
 
+    const storage = db
+        .prepare('SELECT id, room_id, name, kind FROM storage ORDER BY sort_order')
+        .all()
+        .map((item) => ({
+            id: item.id,
+            roomId: item.room_id,
+            name: item.name,
+            kind: item.kind,
+        }));
+
+    const items = db
+        .prepare(
+            'SELECT id, name, category, quantity, note, room_id, storage_id FROM items ORDER BY sort_order',
+        )
+        .all()
+        .map((item) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            quantity: item.quantity,
+            note: item.note,
+            roomId: item.room_id,
+            storageId: item.storage_id ?? null,
+        }));
+
     return {
         plan: row
             ? {
@@ -225,6 +346,8 @@ function loadState(db) {
               }
             : null,
         rooms: rooms.map((room) => ({ ...room, openings: byRoom.get(room.id) ?? [] })),
+        storage,
+        items,
     };
 }
 
@@ -392,7 +515,7 @@ function addOpening(db, raw) {
     const order = db
         .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM openings')
         .get();
-    const id = `opening-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
+    const id = makeId('opening');
 
     db.prepare(
         `INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, sort_order)
@@ -478,6 +601,138 @@ function removeOpening(db, rawId) {
 }
 
 /**
+ * 新增储物设备。名称缺省按类型给一个，用户之后可以改。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {Record<string, unknown>} raw
+ */
+function addStorage(db, raw) {
+    if (typeof raw !== 'object' || raw === null) fail('储物设备参数无效');
+    const roomId = normalizeName(raw.roomId, '房间 id');
+    if (!db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId)) fail('房间不存在');
+    if (!STORAGE_KINDS.has(raw.kind)) fail('储物设备类型无效');
+
+    const name = normalizeName(raw.name, '储物设备名称');
+    const order = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM storage').get();
+    const id = makeId('storage');
+    db.prepare(
+        'INSERT INTO storage (id, room_id, name, kind, sort_order) VALUES (?, ?, ?, ?, ?)',
+    ).run(id, roomId, name, raw.kind, order.next);
+    return loadState(db);
+}
+
+/**
+ * 重命名储物设备。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {unknown} rawId
+ * @param {unknown} rawName
+ */
+function renameStorage(db, rawId, rawName) {
+    const id = normalizeName(rawId, '储物设备 id');
+    const name = normalizeName(rawName, '储物设备名称');
+    const result = db.prepare('UPDATE storage SET name = ? WHERE id = ?').run(name, id);
+    if (result.changes === 0) fail('储物设备不存在');
+    return loadState(db);
+}
+
+/**
+ * 删除储物设备。物品保留在原房间（storage_id 置空），
+ * 否则用户会以为"东西跟着柜子一起被删了"。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {unknown} rawId
+ */
+function removeStorage(db, rawId) {
+    const id = normalizeName(rawId, '储物设备 id');
+    const result = db.prepare('DELETE FROM storage WHERE id = ?').run(id);
+    if (result.changes === 0) fail('储物设备不存在');
+    return loadState(db);
+}
+
+/**
+ * 登记物品。roomId 必填（搜到就能去拿），storageId 可空。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {Record<string, unknown>} raw
+ */
+function addItem(db, raw) {
+    if (typeof raw !== 'object' || raw === null) fail('物品参数无效');
+    const roomId = normalizeName(raw.roomId, '房间 id');
+    if (!db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId)) fail('房间不存在');
+
+    const storageId = raw.storageId ?? null;
+    if (storageId !== null) {
+        const device = db
+            .prepare('SELECT room_id FROM storage WHERE id = ?')
+            .get(normalizeName(storageId, '储物设备 id'));
+        if (!device) fail('储物设备不存在');
+        // 物品必须跟柜子在同一个房间里，否则「位置」会有两个互相矛盾的答案。
+        if (device.room_id !== roomId) fail('储物设备不在所选房间里');
+    }
+
+    const order = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM items').get();
+    const id = makeId('item');
+    db.prepare(
+        `INSERT INTO items (id, room_id, storage_id, name, category, quantity, note, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+        id,
+        roomId,
+        storageId,
+        normalizeName(raw.name, '物品名称'),
+        normalizeName(raw.category, '物品分类'),
+        normalizeQuantity(raw.quantity),
+        normalizeNote(raw.note),
+        order.next,
+    );
+    return loadState(db);
+}
+
+/**
+ * 修改物品。只传要改的字段；换柜子时校验新柜子与物品同房间。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {unknown} rawId
+ * @param {Record<string, unknown>} patch
+ */
+function updateItem(db, rawId, patch) {
+    const id = normalizeName(rawId, '物品 id');
+    const row = db.prepare('SELECT id, room_id, storage_id FROM items WHERE id = ?').get(id);
+    if (!row) fail('物品不存在');
+
+    const name = patch.name === undefined ? undefined : normalizeName(patch.name, '物品名称');
+    const category =
+        patch.category === undefined ? undefined : normalizeName(patch.category, '物品分类');
+    const quantity = patch.quantity === undefined ? undefined : normalizeQuantity(patch.quantity);
+    const note = patch.note === undefined ? undefined : normalizeNote(patch.note);
+
+    let storageId = row.storage_id;
+    if (patch.storageId !== undefined) {
+        if (patch.storageId === null) storageId = null;
+        else {
+            const next = normalizeName(patch.storageId, '储物设备 id');
+            const device = db.prepare('SELECT room_id FROM storage WHERE id = ?').get(next);
+            if (!device) fail('储物设备不存在');
+            if (device.room_id !== row.room_id) fail('储物设备不在该物品所在的房间');
+            storageId = next;
+        }
+    }
+
+    db.prepare(
+        'UPDATE items SET name = COALESCE(?, name), category = COALESCE(?, category), quantity = COALESCE(?, quantity), note = COALESCE(?, note), storage_id = ? WHERE id = ?',
+    ).run(name ?? null, category ?? null, quantity ?? null, note ?? null, storageId, id);
+    return loadState(db);
+}
+
+/**
+ * 删除物品。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {unknown} rawId
+ */
+function removeItem(db, rawId) {
+    const id = normalizeName(rawId, '物品 id');
+    const result = db.prepare('DELETE FROM items WHERE id = ?').run(id);
+    if (result.changes === 0) fail('物品不存在');
+    return loadState(db);
+}
+
+/**
  * 命令分发：渲染层只发语义化命令，具体 SQL 与校验都留在主进程。
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {{ type: string } & Record<string, unknown>} command
@@ -489,7 +744,7 @@ function dispatchCommand(db, command) {
 
     switch (command.type) {
         case 'replace-rooms':
-            return replaceRooms(db, command.rooms);
+            return replaceRooms(db, command.rooms, command.storage, command.items);
         case 'create-plan':
             return createPlan(db, command.name);
         case 'add-room':
@@ -512,6 +767,18 @@ function dispatchCommand(db, command) {
             return removeOpening(db, command.id);
         case 'set-room-floor':
             return setRoomFloor(db, command.id, command.floor ?? null);
+        case 'add-storage':
+            return addStorage(db, /** @type {Record<string, unknown>} */ (command));
+        case 'rename-storage':
+            return renameStorage(db, command.id, command.name);
+        case 'remove-storage':
+            return removeStorage(db, command.id);
+        case 'add-item':
+            return addItem(db, /** @type {Record<string, unknown>} */ (command));
+        case 'update-item':
+            return updateItem(db, command.id, /** @type {Record<string, unknown>} */ (command));
+        case 'remove-item':
+            return removeItem(db, command.id);
         default:
             return fail(`未知命令：${command.type}`);
     }

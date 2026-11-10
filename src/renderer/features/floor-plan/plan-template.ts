@@ -1,4 +1,4 @@
-import type { Room, WallSide, OpeningKind } from '@/app/types';
+import type { Room, StorageDevice, StoredItem, WallSide, OpeningKind } from '@/app/types';
 
 /** A connected two-bedroom reference plan, offered only on an empty drawing. */
 export function exampleRooms(): Room[] {
@@ -108,5 +108,48 @@ export function exampleRooms(): Room[] {
                 opening('sample-w5', 'window', 'bottom', 36, 324),
             ],
         },
+    ];
+}
+
+/**
+ * 示例储物设备：跟示例户型一起铺上，让「点柜子看里面有什么」一打开就能试。
+ * 只在选择"用示例户型开始"时写入，从空白开始的用户拿到的是干净的空家。
+ */
+export function exampleStorage(): StorageDevice[] {
+    return [
+        { id: 'sample-st-wardrobe', roomId: 'sample-master', name: '衣柜', kind: 'cabinet' },
+        { id: 'sample-st-bedside', roomId: 'sample-master', name: '床头柜', kind: 'furniture' },
+        { id: 'sample-st-books', roomId: 'sample-bedroom', name: '书架', kind: 'shelf' },
+        { id: 'sample-st-desk', roomId: 'sample-bedroom', name: '书桌', kind: 'furniture' },
+        { id: 'sample-st-pantry', roomId: 'sample-kitchen', name: '食品柜', kind: 'cabinet' },
+        { id: 'sample-st-tools', roomId: 'sample-balcony', name: '工具柜', kind: 'cabinet' },
+        { id: 'sample-st-luggage', roomId: 'sample-balcony', name: '收纳箱', kind: 'box' },
+        { id: 'sample-st-shoe', roomId: 'sample-entrance', name: '鞋柜', kind: 'cabinet' },
+    ];
+}
+
+/** 示例物品：覆盖"柜子里有东西"和"东西还没进柜子"两种状态。 */
+export function exampleItems(): StoredItem[] {
+    const item = (
+        id: string,
+        name: string,
+        category: string,
+        roomId: string,
+        storageId: string | null,
+        quantity = 1,
+        note = '',
+    ): StoredItem => ({ id, name, category, quantity, note, roomId, storageId });
+
+    return [
+        item('sample-i1', '羽绒服', '衣物', 'sample-master', 'sample-st-wardrobe', 2, '冬季'),
+        item('sample-i2', '登山包', '户外', 'sample-master', 'sample-st-wardrobe'),
+        item('sample-i3', '护照', '证件', 'sample-master', 'sample-st-bedside'),
+        item('sample-i4', '小说合集', '书籍', 'sample-bedroom', 'sample-st-books', 12),
+        item('sample-i5', '笔记本电脑', '电子', 'sample-bedroom', 'sample-st-desk'),
+        item('sample-i6', '螺丝刀套装', '工具', 'sample-balcony', 'sample-st-tools'),
+        item('sample-i7', '行李箱', '其他', 'sample-balcony', 'sample-st-luggage', 2),
+        item('sample-i8', '运动鞋', '衣物', 'sample-entrance', 'sample-st-shoe', 4),
+        item('sample-i9', '大米', '食品', 'sample-kitchen', 'sample-st-pantry', 3),
+        item('sample-i10', '备用钥匙', '其他', 'sample-entrance', null, 1, '未入柜'),
     ];
 }

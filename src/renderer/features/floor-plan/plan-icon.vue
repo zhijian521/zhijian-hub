@@ -21,6 +21,9 @@ const paths: Record<string, string> = {
     close: 'M6 6l12 12M18 6L6 18',
     box: 'M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8',
     tag: 'M3 12V4h8l9 9-8 8zM7 8h.01',
+    sofa: 'M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M4 12a2 2 0 0 0-2 2v4h20v-4a2 2 0 0 0-2-2M4 12h16M6 18v3m12-3v3',
+    cabinet: 'M5 3h14v18H5zM5 10h14M12 3v18M9 7h.01M15 14h.01',
+    house: 'M4 10l8-6 8 6v10H4zM10 20v-6h4v6',
 };
 </script>
 <template>

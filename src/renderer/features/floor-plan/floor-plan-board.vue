@@ -4,18 +4,21 @@
 
   布局原则：界面里没有一条常驻的 header / footer / 侧边栏，画布铺满整个窗口。
   所有控件都是浮在画布上的「悬浮件」：
-    · 顶部居中 —— 快捷搜索框（当前只有样式）
-    · 左上角   —— 菜单（家 / 储物 / 物品 / 图纸 / 导出）
-    · 底部居中 —— 绘图工具与撤销重做
-    · 左下角   —— 视图开关与比例尺
+    · 顶部居中 —— 快捷搜索（物品 / 储物设备 / 房间）
+    · 左上角   —— 菜单（首页 / 房间 / 家具 / 储物 / 修改 / 图纸 / 导出）
+    · 底部居中 —— 绘图工具与撤销重做（仅修改模式）
+    · 左下角   —— 视图开关、比例尺与图纸角标
     · 右下角   —— 缩放
-  左右分工：左边是「菜单」，点开的列表卡片贴左展开；
-  右边是「详情」——房间与门窗属性贴右展开。
-  两张卡片可以同时存在，都不挤压画布。
+
+  右侧是唯一的详情区，三种内容互斥：
+    · 看内容 —— 点房间或柜子，列出里面存着的东西（浏览模式的主视角）
+    · 清单   —— 点左侧「房间 / 家具 / 储物」，列整体清单
+    · 属性   —— 修改模式下改一个房间 / 门窗
+  首页选中时右侧什么都不弹：只剩画布、搜索和左侧菜单。
 ============================================================================*/
 
-import { computed, nextTick, ref, watch } from 'vue';
-import type { FloorMaterial, Opening, Room } from '@/app/types';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import type { FloorMaterial, Opening, Room, StorageKind, StoredItem } from '@/app/types';
 import FloatCard from '@/components/float-card.vue';
 import {
     doorGeometry,
@@ -32,16 +35,20 @@ import {
     MILLIMETERS_PER_PIXEL,
     wallOpenings,
 } from '@/lib/plan-scene';
+import { searchPlan, type SearchHit } from '@/lib/plan-search';
+import { layoutStorage } from '@/lib/plan-storage';
 import { roomArea } from '@/stores/floor-plan';
 import PlanDrawing from './plan-drawing.vue';
 import PlanIcon from './plan-icon.vue';
-import { exampleRooms } from './plan-template';
+import { exampleItems, exampleRooms, exampleStorage } from './plan-template';
 import { usePlanEditor, type PlanTool } from './use-plan-editor';
 
 const {
     store,
     stage,
     tool,
+    mode,
+    hoveredRoomId,
     zoom,
     pan,
     rooms,
@@ -56,6 +63,8 @@ const {
     drag,
     message,
     chooseTool,
+    setMode,
+    focusRoom,
     selectRoom,
     down,
     move,
@@ -68,16 +77,28 @@ const {
     setDimension,
 } = usePlanEditor();
 
-/* 左侧菜单：找东西的地方——点开的是列表卡片，贴在菜单右边。 */
-type MenuId = 'none' | 'home' | 'storage' | 'items';
-const menu = ref<MenuId>('none');
-/* 右侧详情：看/改一个具体对象——房间与门窗属性、图纸概览。 */
-const detail = ref(false);
+/*== 左侧菜单 ==============================================================
+  首页是默认项：它不打开任何卡片，界面就只剩画布、搜索和菜单。
+  房间 / 家具 / 储物 三项在右侧列出清单，点清单条目看里面存了什么。    */
+type MenuId = 'home' | 'rooms' | 'furniture' | 'storage';
+const menu = ref<MenuId>('home');
 const menus: { id: MenuId; label: string; icon: string }[] = [
-    { id: 'home', label: '家', icon: 'home' },
-    { id: 'storage', label: '储物', icon: 'box' },
-    { id: 'items', label: '物品', icon: 'tag' },
+    { id: 'home', label: '首页', icon: 'home' },
+    { id: 'rooms', label: '房间', icon: 'room' },
+    { id: 'furniture', label: '家具', icon: 'sofa' },
+    { id: 'storage', label: '储物', icon: 'cabinet' },
 ];
+
+/*== 右侧详情的三种内容 ====================================================
+  browse  —— 正在看哪个房间 / 柜子的内容
+  detail  —— 修改模式下的属性编辑
+  menu    —— 左侧三个清单项，没点具体对象时列整体清单                     */
+const browse = ref<{ kind: 'room' | 'storage'; id: string } | null>(null);
+const detail = ref(false);
+/** 刚定位到的物品：让它闪一下，眼睛才跟得上。 */
+const locatedItemId = ref<string | null>(null);
+const hoverStorageId = ref<string | null>(null);
+
 const materials: { id: FloorMaterial; label: string }[] = [
     { id: 'wood', label: '橡木地板' },
     { id: 'walnut', label: '胡桃木' },
@@ -90,11 +111,26 @@ const materials: { id: FloorMaterial; label: string }[] = [
     { id: 'microcement', label: '微水泥' },
     { id: 'carpet', label: '地毯' },
 ];
-const itemCategories = ['衣物', '书籍', '工具', '电子', '户外', '纪念', '其他'];
-const itemName = ref('');
-const itemRoom = ref('');
-const itemCategory = ref('衣物');
+const storageKinds: { id: StorageKind; label: string; icon: string }[] = [
+    { id: 'cabinet', label: '柜子', icon: 'cabinet' },
+    { id: 'shelf', label: '架子', icon: 'box' },
+    { id: 'box', label: '收纳箱', icon: 'box' },
+    { id: 'furniture', label: '家具', icon: 'sofa' },
+];
+const itemCategories = ['衣物', '书籍', '工具', '电子', '户外', '食品', '证件', '纪念', '其他'];
+
 const searchQuery = ref('');
+const searchInput = ref<HTMLInputElement | null>(null);
+const searchFocused = ref(false);
+const searchHits = computed(() =>
+    searchPlan(
+        { rooms: rooms.value, storage: store.storage, items: store.items },
+        searchQuery.value,
+    ),
+);
+const searchOpen = computed(
+    () => searchFocused.value && searchQuery.value.trim().length > 0 && searchHits.value.length > 0,
+);
 
 const showDimensions = ref(true);
 const showMaterials = ref(false);
@@ -107,32 +143,214 @@ const openingWidth = ref(900);
 const openingPosition = ref(0);
 const exportRef = ref<SVGSVGElement | null>(null);
 const exporting = ref(false);
+
 const totalArea = computed(() =>
     rooms.value.reduce((sum, r) => sum + (r.width * r.height) / 3600, 0).toFixed(1),
 );
 const openingCount = computed(() => rooms.value.reduce((sum, r) => sum + r.openings.length, 0));
-const saveLabel = computed(() =>
-    store.status === 'failed'
-        ? '读取失败'
-        : store.status === 'loading'
-          ? '正在读取'
-          : store.errorMessage
-            ? '修改未保存'
-            : store.busy
-              ? '正在保存'
-              : '已保存到本机',
+/* 保存状态原本挂在左侧卡片标题上；卡片改成右侧互斥展示后没有落点了，
+   状态本身仍由 store.status 驱动，这里不再单独算一份字符串。 */
+
+/*== 储物设备与物品 ========================================================*/
+const storageBoxes = computed(() => layoutStorage(rooms.value, store.storage));
+const roomNames = computed(() => new Map(rooms.value.map((room) => [room.id, room.name])));
+
+const itemsOfRoom = (roomId: string) => store.items.filter((item) => item.roomId === roomId);
+const itemsOfStorage = (storageId: string) =>
+    store.items.filter((item) => item.storageId === storageId);
+const deviceOf = (id: string) => store.storage.find((device) => device.id === id) ?? null;
+const iconOfKind = (kind: StorageKind) =>
+    storageKinds.find((entry) => entry.id === kind)?.icon ?? 'cabinet';
+
+/** 右侧「物品内容」卡片的数据：房间或柜子，二选一。 */
+const browseRoom = computed<Room | null>(() => {
+    const target = browse.value;
+    if (!target) return null;
+    const roomId = target.kind === 'room' ? target.id : (deviceOf(target.id)?.roomId ?? null);
+    return roomId ? (rooms.value.find((room) => room.id === roomId) ?? null) : null;
+});
+const browseDevice = computed(() =>
+    browse.value?.kind === 'storage' ? deviceOf(browse.value.id) : null,
 );
-const tools: { id: PlanTool; label: string; key: string; detail: string }[] = [
-    { id: 'select', label: '选择', key: 'V', detail: '选择、移动与调整房间' },
-    { id: 'room', label: '房间', key: 'R', detail: '拖拽绘制房间，靠近墙面自动吸附' },
-    { id: 'door', label: '门', key: 'D', detail: '点击墙面放置门，先选房间可指定开启侧' },
-    { id: 'window', label: '窗', key: 'W', detail: '点击墙面放置窗' },
-    { id: 'hand', label: '平移', key: 'H', detail: '拖动画布查看户型' },
-];
+const browseTitle = computed(() =>
+    browseDevice.value ? browseDevice.value.name : (browseRoom.value?.name ?? ''),
+);
+const browseItems = computed<StoredItem[]>(() => {
+    const device = browseDevice.value;
+    if (device) return itemsOfStorage(device.id);
+    const room = browseRoom.value;
+    return room ? itemsOfRoom(room.id) : [];
+});
+/** 卡片顶部那一行：一共存放了多少物品。没有东西时明确说空，不留空白。 */
+const browseCountLabel = computed(() => {
+    if (!browseItems.value.length) return '暂时没有登记物品';
+    const total = browseItems.value.reduce((sum, item) => sum + item.quantity, 0);
+    return total === browseItems.value.length
+        ? `一共 ${total} 件物品`
+        : `一共 ${browseItems.value.length} 种 · ${total} 件物品`;
+});
+
+/** 物品行：副行在脚本里拼好。模板里用多个 <template> 拼空格会被格式化吃掉，
+    渲染成「2 件· 衣柜」，所以先把分隔符定死。 */
+const browseItemRows = computed(() =>
+    browseItems.value.map((item) => ({
+        id: item.id,
+        name: item.name,
+        item,
+        meta: [
+            item.category,
+            item.quantity > 1 ? `${item.quantity} 件` : '',
+            browseDevice.value || !item.storageId ? '' : (deviceOf(item.storageId)?.name ?? ''),
+            item.note,
+        ]
+            .filter(Boolean)
+            .join(' · '),
+    })),
+);
+
+/** 画布上的「选中」样式：只有真的选中了房间 / 柜子才点亮，悬停是另一套浅一档的提示。 */
+const activeRoomId = computed(() => {
+    const target = browse.value;
+    if (target?.kind === 'room') return target.id;
+    if (mode.value === 'edit') return store.selectedId;
+    return null;
+});
+const activeStorageId = computed(() => (browse.value?.kind === 'storage' ? browse.value.id : null));
+
+/** 属性卡片里要用的两份列表：选中房间的柜子、选中房间的物品。
+    模板箭头函数里 selectedRoom 的类型收窄会丢，一律在脚本层算好。 */
+const roomStorage = computed(() =>
+    selectedRoom.value
+        ? store.storage.filter((entry) => entry.roomId === selectedRoom.value!.id)
+        : [],
+);
+const roomItems = computed(() => (selectedRoom.value ? itemsOfRoom(selectedRoom.value.id) : []));
+
+/*== 左侧清单：点「房间 / 家具 / 储物」时右侧列什么 ========================*/
+interface PlaceEntry {
+    kind: 'room' | 'storage';
+    id: string;
+    title: string;
+    detail: string;
+    icon: string;
+    count: number;
+}
+const listEntries = computed<PlaceEntry[]>(() => {
+    if (menu.value === 'rooms') {
+        return rooms.value.map((room) => ({
+            kind: 'room' as const,
+            id: room.id,
+            title: room.name,
+            detail: `${roomArea(room).toFixed(1)} m² · ${room.openings.length} 处门窗`,
+            icon: 'room',
+            count: itemsOfRoom(room.id).length,
+        }));
+    }
+    if (menu.value === 'furniture' || menu.value === 'storage') {
+        return store.storage
+            .filter((device) => menu.value === 'storage' || device.kind === 'furniture')
+            .map((device) => ({
+                kind: 'storage' as const,
+                id: device.id,
+                title: device.name,
+                detail: roomNames.value.get(device.roomId) ?? '未归位',
+                icon: iconOfKind(device.kind),
+                count: itemsOfStorage(device.id).length,
+            }));
+    }
+    return [];
+});
+const listEyebrow = computed(() =>
+    menu.value === 'rooms' ? 'ROOMS' : menu.value === 'furniture' ? 'FURNITURE' : 'STORAGE',
+);
+const listTitle = computed(() =>
+    menu.value === 'rooms' ? '房间' : menu.value === 'furniture' ? '家具' : '储物设备',
+);
+const listSubtitle = computed(() =>
+    menu.value === 'rooms'
+        ? `${rooms.value.length} 个空间 · ${totalArea.value} m² · ${openingCount.value} 处门窗`
+        : `${listEntries.value.length} 件 · 点进去看里面存了什么`,
+);
+const listEmpty = computed(() =>
+    menu.value === 'rooms'
+        ? '还没有房间。开修改模式在画布上拖出第一个空间。'
+        : menu.value === 'furniture'
+          ? '还没有登记家具。开修改模式在房间里添加。'
+          : '还没有储物设备。开修改模式在房间里添加柜子。',
+);
+
+/** 右侧只有一张卡片，内容优先级：看内容 > 属性 > 清单。 */
+const rightCard = computed<'browse' | 'property' | 'list' | null>(() => {
+    if (browse.value) return 'browse';
+    if (detail.value) return 'property';
+    if (menu.value !== 'home') return 'list';
+    return null;
+});
+
+/*== 编辑模式下的两个小表单：加柜子、放东西 ================================*/
+const newStorageName = ref('');
+const newStorageKind = ref<StorageKind>('cabinet');
+const itemName = ref('');
+const itemCategory = ref('衣物');
+const itemQuantity = ref(1);
+const itemNote = ref('');
+const itemStorageId = ref<string | null>(null);
+const itemFormError = ref('');
+
+function resetItemForm() {
+    itemName.value = '';
+    itemQuantity.value = 1;
+    itemNote.value = '';
+    itemFormError.value = '';
+}
+
+async function submitStorage() {
+    const room = browseRoom.value;
+    if (!room) return;
+    const label =
+        newStorageName.value.trim() ||
+        (storageKinds.find((kind) => kind.id === newStorageKind.value)?.label ?? '柜子');
+    if (await store.addStorage(room.id, label, newStorageKind.value)) {
+        newStorageName.value = '';
+        message.value = '';
+    }
+}
+
+async function submitItem() {
+    const room = browseRoom.value;
+    if (!room) return;
+    const label = itemName.value.trim();
+    if (!label) {
+        itemFormError.value = '先给物品起个名字';
+        return;
+    }
+    if (
+        !(await store.addItem({
+            roomId: room.id,
+            storageId: itemStorageId.value,
+            name: label,
+            category: itemCategory.value,
+            quantity: Math.max(1, Math.round(Number(itemQuantity.value) || 1)),
+            note: itemNote.value.trim(),
+        }))
+    ) {
+        itemFormError.value = store.errorMessage || '保存失败';
+        return;
+    }
+    resetItemForm();
+}
+
+/*== 画布交互 ==============================================================*/
+const selectedFloorLabel = computed(() => {
+    const room = selectedRoom.value;
+    if (!room) return '自动推断';
+    const id = resolveFloor(room);
+    return materials.find((material) => material.id === id)?.label ?? '自动推断';
+});
 const cursor = computed(() =>
     drag.value?.kind === 'pan'
         ? 'grabbing'
-        : space.value || tool.value === 'hand'
+        : mode.value === 'browse' || space.value || tool.value === 'hand'
           ? 'grab'
           : tool.value === 'select'
             ? 'default'
@@ -140,7 +358,8 @@ const cursor = computed(() =>
 );
 const handles = computed(() => {
     const room = selectedRoom.value;
-    if (!room || selectedOpening.value || tool.value !== 'select') return [];
+    if (!room || selectedOpening.value || tool.value !== 'select' || mode.value !== 'edit')
+        return [];
     return (['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as ResizeDir[]).map((dir) => ({
         dir,
         x: dir.includes('w')
@@ -180,21 +399,140 @@ const exportBounds = computed(() => {
 const mm = (px: number) => Math.round(px * MILLIMETERS_PER_PIXEL);
 const wallNames = { top: '上侧墙', right: '右侧墙', bottom: '下侧墙', left: '左侧墙' };
 const presets = ['客餐厅', '主卧', '次卧', '书房', '厨房', '卫生间', '阳台', '玄关'];
+const tools: { id: PlanTool; label: string; key: string; detail: string }[] = [
+    { id: 'select', label: '选择', key: 'V', detail: '选择、移动与调整房间' },
+    { id: 'room', label: '房间', key: 'R', detail: '拖拽绘制房间，靠近墙面自动吸附' },
+    { id: 'door', label: '门', key: 'D', detail: '点击墙面放置门，先选房间可指定开启侧' },
+    { id: 'window', label: '窗', key: 'W', detail: '点击墙面放置窗' },
+    { id: 'hand', label: '平移', key: 'H', detail: '拖动画布查看户型' },
+];
 
-/* 左侧菜单同一个按钮再点一次就收起，切到另一个则换成另一张列表。 */
-function toggleMenu(id: MenuId) {
-    menu.value = menu.value === id ? 'none' : id;
+/*== 导航 ==================================================================*/
+/** 左侧菜单：首页永远只是「收起一切」；其余三项各打开一张清单。 */
+function goMenu(id: MenuId) {
+    menu.value = id;
+    browse.value = null;
+    detail.value = false;
 }
-/* 在画布或左侧列表里选中房间，右侧详情卡片自动跟上来（用户关掉就不再自己弹）。 */
+
+/** 点房间：浏览模式看里面有什么，修改模式才进属性。 */
 function openRoom(id: string) {
     selectRoom(id);
-    chooseTool('select');
-    detail.value = true;
+    if (mode.value === 'edit') {
+        browse.value = null;
+        detail.value = true;
+        return;
+    }
+    browse.value = { kind: 'room', id };
 }
+
+/** 画布上点柜子（pointerdown.stop 到这里，避免顺带平移画布）。
+    浏览模式看里面存了什么；修改模式只是把房间属性调出来，不改柜子本身。 */
+function pickStorage(id: string) {
+    const device = deviceOf(id);
+    if (!device) return;
+    if (mode.value === 'edit') {
+        selectRoom(device.roomId);
+        browse.value = null;
+        detail.value = true;
+        return;
+    }
+    openStorage(id);
+}
+
+/** 菜单项再点一次就回首页：不想要卡片时不必去够关闭按钮。 */
+function toggleMenu(id: MenuId) {
+    goMenu(menu.value === id ? 'home' : id);
+}
+
+/** 点柜子：直接看这个柜子里存了什么。 */
+function openStorage(id: string) {
+    if (mode.value !== 'browse') return;
+    const device = deviceOf(id);
+    if (!device) return;
+    selectRoom(device.roomId);
+    browse.value = { kind: 'storage', id };
+}
+
+/** 点一件物品：把视线拉到它所在的房间，并让它在列表里闪一下。
+    编辑模式下右侧正开着属性卡片，别被切成「看内容」。 */
+function locateItem(item: StoredItem) {
+    selectRoom(item.roomId);
+    focusRoom(item.roomId);
+    if (mode.value === 'browse') {
+        browse.value = item.storageId
+            ? { kind: 'storage', id: item.storageId }
+            : { kind: 'room', id: item.roomId };
+    }
+    locatedItemId.value = item.id;
+    window.setTimeout(() => {
+        if (locatedItemId.value === item.id) locatedItemId.value = null;
+    }, 1800);
+}
+
+/** 搜索命中的唯一下场：定位对象 + 收起下拉。 */
+function goToHit(hit: SearchHit) {
+    if (hit.kind === 'item') {
+        const item = store.items.find((entry) => entry.id === hit.id);
+        if (item) locateItem(item);
+    } else if (hit.kind === 'storage') {
+        pickStorage(hit.id);
+    } else {
+        openRoom(hit.id);
+    }
+    focusRoom(hit.roomId);
+    searchQuery.value = '';
+    searchFocused.value = false;
+    searchInput.value?.blur();
+}
+
+/** 修改模式是一个显式开关：没开的时候画布只负责看和点。 */
+function toggleMode() {
+    if (mode.value === 'edit') {
+        const roomId = browseRoom.value?.id ?? store.selectedId;
+        setMode('browse');
+        detail.value = false;
+        browse.value = roomId ? { kind: 'room', id: roomId } : null;
+        return;
+    }
+    // 进修改模式：把正在看的那个房间直接带进属性卡片，右侧不会突然空掉。
+    const roomId = browseRoom.value?.id ?? store.selectedId;
+    setMode('edit');
+    browse.value = null;
+    if (roomId) {
+        selectRoom(roomId);
+        detail.value = true;
+    } else detail.value = false;
+}
+
+/* Ctrl/⌘ + K 聚焦搜索：浏览模式下最常用的动作得有个直达键。 */
+function onShortcut(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInput.value?.focus();
+        searchInput.value?.select();
+    }
+}
+onMounted(() => window.addEventListener('keydown', onShortcut));
+onUnmounted(() => window.removeEventListener('keydown', onShortcut));
+
+/* 选中谁就展示谁：画布点选、清单点选都汇到这一个入口。 */
 watch(
     () => store.selectedId,
     (id) => {
-        if (id) detail.value = true;
+        if (!id) {
+            if (mode.value === 'browse') browse.value = null;
+            return;
+        }
+        if (mode.value === 'edit') {
+            browse.value = null;
+            detail.value = true;
+            return;
+        }
+        // 点柜子时已经定好了要看柜子，别再被"选中房间"覆盖回房间。
+        if (browse.value?.kind === 'storage') return;
+        if (browse.value?.kind === 'room' && browse.value.id === id) return;
+        browse.value = { kind: 'room', id };
     },
 );
 watch(
@@ -214,6 +552,12 @@ watch(
     },
     { immediate: true },
 );
+/* 换房间或换柜子时，物品表单的"放哪个柜子"要跟着回到合理默认值。 */
+watch(browse, (target) => {
+    itemStorageId.value = target?.kind === 'storage' ? target.id : null;
+    resetItemForm();
+});
+
 async function rename(value = name.value) {
     const room = store.selectedRoom;
     if (!room) return;
@@ -267,18 +611,23 @@ function selectOpening(room: Room, opening: Opening) {
     store.select(room.id);
     selectedOpeningId.value = opening.id;
     tool.value = 'select';
+    browse.value = null;
     detail.value = true;
 }
 async function createPlan(template: boolean) {
     if (!(await store.createPlan(newPlanName.value))) return;
-    if (template) await store.replaceRooms(exampleRooms());
-    else tool.value = 'room';
+    if (template) {
+        await store.replaceRooms(exampleRooms());
+        // 示例户型带着示例储物与物品：第一次打开就能试"点柜子看里面有什么"。
+        await store.importFurnishing(exampleStorage(), exampleItems());
+    } else tool.value = 'room';
     await nextTick();
     fit();
 }
 async function loadExample() {
     if (store.rooms.length) return;
     await store.replaceRooms(exampleRooms());
+    await store.importFurnishing(exampleStorage(), exampleItems());
     await nextTick();
     fit();
 }
@@ -352,8 +701,88 @@ async function exportSvg() {
                         :dimensions="showDimensions"
                         :materials="showMaterials"
                     />
+                    <!-- 浏览模式：虚线 == 选中，全站只有这一种虚线。
+                         没选中的房间不描边（本来就有墙体线稿，再叠一圈虚线太吵）；
+                         鼠标压上去给一条很淡的实线当「这里能点」的提示，不是虚线。-->
+                    <g v-if="mode === 'browse'" pointer-events="none">
+                        <rect
+                            v-for="room in rooms"
+                            :key="`edge-${room.id}`"
+                            :x="room.x"
+                            :y="room.y"
+                            :width="room.width"
+                            :height="room.height"
+                            :data-selected="room.id === activeRoomId"
+                            fill="none"
+                            :stroke="
+                                room.id === activeRoomId
+                                    ? 'var(--brand)'
+                                    : room.id === hoveredRoomId
+                                      ? 'var(--room-line)'
+                                      : 'transparent'
+                            "
+                            :stroke-width="(room.id === activeRoomId ? 1.8 : 1) / zoom"
+                            :stroke-dasharray="
+                                room.id === activeRoomId ? `${7 / zoom} ${5 / zoom}` : undefined
+                            "
+                            stroke-linecap="butt"
+                        />
+                    </g>
+                    <!-- 储物设备：按房间自动铺成网格（不做自由拖拽）。
+                         浏览模式下它们是「点得进去的柜子」，点了就看里面存了什么；
+                         鼠标压上去加深，和房间边界的提示语言保持一致。-->
+                    <g v-if="storageBoxes.length" class="storage-layer">
+                        <g
+                            v-for="box in storageBoxes"
+                            :key="box.id"
+                            class="storage-box"
+                            :data-storage="box.id"
+                            @pointerdown.stop="pickStorage(box.id)"
+                            @pointerenter="hoverStorageId = box.id"
+                            @pointerleave="hoverStorageId = null"
+                        >
+                            <rect
+                                :x="box.x"
+                                :y="box.y"
+                                :width="box.width"
+                                :height="box.height"
+                                rx="1.5"
+                                :data-selected="box.id === activeStorageId"
+                                :fill="
+                                    box.id === hoverStorageId
+                                        ? 'var(--sto-fill-strong)'
+                                        : 'var(--sto-fill)'
+                                "
+                                :stroke="
+                                    box.id === activeStorageId
+                                        ? 'var(--brand)'
+                                        : box.id === hoverStorageId
+                                          ? 'var(--sto-text)'
+                                          : 'var(--sto-line)'
+                                "
+                                :stroke-width="(box.id === activeStorageId ? 1.8 : 1) / zoom"
+                                :stroke-dasharray="
+                                    box.id === activeStorageId
+                                        ? `${6 / zoom} ${4 / zoom}`
+                                        : undefined
+                                "
+                            />
+                            <text
+                                :x="box.x + box.width / 2"
+                                :y="box.y + box.height / 2 + 3.2 / zoom"
+                                text-anchor="middle"
+                                :font-size="9.5 / zoom"
+                                fill="var(--sto-text)"
+                                pointer-events="none"
+                            >
+                                {{ box.name }}
+                            </text>
+                        </g>
+                    </g>
                     <rect
-                        v-if="selectedRoom && tool === 'select' && !selectedOpening"
+                        v-if="
+                            mode === 'edit' && selectedRoom && tool === 'select' && !selectedOpening
+                        "
                         :x="selectedRoom.x + 10 / zoom"
                         :y="selectedRoom.y + 10 / zoom"
                         :width="Math.max(0, selectedRoom.width - 20 / zoom)"
@@ -364,7 +793,10 @@ async function exportSvg() {
                         :stroke-dasharray="`${4 / zoom} ${4 / zoom}`"
                         pointer-events="none"
                     />
-                    <g v-if="selectedOpening && selectedRoom" pointer-events="none">
+                    <g
+                        v-if="mode === 'edit' && selectedOpening && selectedRoom"
+                        pointer-events="none"
+                    >
                         <rect
                             v-bind="
                                 openingBox(selectedRoom, selectedOpening, EXTERIOR_WALL + 8 / zoom)
@@ -493,10 +925,13 @@ async function exportSvg() {
                     试试两室一厅示例 →
                 </button>
             </div>
-            <div v-else-if="!store.rooms.length && tool !== 'room'" class="empty-prompt">
+            <div
+                v-else-if="!store.rooms.length && !(mode === 'edit' && tool === 'room')"
+                class="empty-prompt"
+            >
                 <PlanIcon name="room" />
                 <h3>从一个房间开始</h3>
-                <p>选择「房间」，在画布上拖出它的轮廓。</p>
+                <p>点「开始修改」进入修改模式，在画布上拖出它的轮廓。</p>
                 <button class="button primary" @click="chooseTool('room')">绘制第一个房间</button>
                 <button class="text-button" :disabled="store.busy" @click="loadExample">
                     使用两室一厅示例
@@ -504,21 +939,60 @@ async function exportSvg() {
             </div>
         </div>
 
-        <!--== 顶部居中：快捷搜索（暂时只有样式） ============================-->
+        <!--== 顶部居中：快捷搜索（物品 / 储物设备 / 房间 一起搜） ============-->
         <div class="float-search">
             <label class="search-box">
                 <PlanIcon name="search" />
                 <input
+                    ref="searchInput"
                     v-model="searchQuery"
                     type="search"
-                    placeholder="搜索物品、房间或储物设备"
-                    aria-label="搜索物品、房间或储物设备"
+                    placeholder="搜物品、柜子或房间"
+                    aria-label="搜索物品、储物设备或房间"
+                    @focus="searchFocused = true"
+                    @blur="searchFocused = false"
+                    @keydown.esc.prevent="
+                        searchQuery = '';
+                        ($event.target as HTMLInputElement).blur();
+                    "
+                    @keydown.enter.prevent="searchHits[0] && goToHit(searchHits[0])"
                 />
-                <kbd>⌘ K</kbd>
+                <kbd>Ctrl K</kbd>
             </label>
+            <div v-if="searchOpen" class="search-results" role="listbox" aria-label="搜索结果">
+                <button
+                    v-for="hit in searchHits"
+                    :key="`${hit.kind}-${hit.id}`"
+                    class="search-hit"
+                    role="option"
+                    :aria-selected="hit.id === (browse?.id ?? store.selectedId)"
+                    @mousedown.prevent="goToHit(hit)"
+                >
+                    <PlanIcon
+                        :name="
+                            hit.kind === 'item'
+                                ? 'tag'
+                                : hit.kind === 'storage'
+                                  ? 'cabinet'
+                                  : 'room'
+                        "
+                    />
+                    <span class="item-main">
+                        {{ hit.title }}
+                        <small>{{ hit.detail }}</small>
+                    </span>
+                    <span class="hit-enter">↵</span>
+                </button>
+            </div>
+            <p
+                v-else-if="searchFocused && searchQuery.trim() && !searchHits.length"
+                class="search-empty"
+            >
+                没有叫「{{ searchQuery.trim() }}」的房间、柜子或物品
+            </p>
         </div>
 
-        <!--== 左上：菜单（家 / 储物 / 物品 / 图纸 / 导出） ==================-->
+        <!--== 左上：菜单（首页 / 房间 / 家具 / 储物 / 修改 / 图纸 / 导出） ==-->
         <nav class="float-rail rail-left" aria-label="菜单">
             <button
                 v-for="item in menus"
@@ -533,6 +1007,17 @@ async function exportSvg() {
                 <span>{{ item.label }}</span>
             </button>
             <span class="rail-divider" />
+            <button
+                :title="mode === 'edit' ? '完成修改 (E)' : '开始修改户型 (E)'"
+                :aria-label="mode === 'edit' ? '完成修改' : '开始修改户型'"
+                :class="{ active: mode === 'edit', editing: mode === 'edit' }"
+                :aria-pressed="mode === 'edit'"
+                :disabled="!store.hasPlan || store.busy"
+                @click="toggleMode"
+            >
+                <PlanIcon :name="mode === 'edit' ? 'check' : 'room'" />
+                <span>{{ mode === 'edit' ? '完成' : '修改' }}</span>
+            </button>
             <button
                 title="图纸"
                 aria-label="图纸"
@@ -556,46 +1041,52 @@ async function exportSvg() {
 
         <!--== 底部居中：绘图工具 ============================================-->
         <div class="float-toolbar" aria-label="绘图工具">
-            <div class="tool-group">
-                <button
-                    v-for="item in tools"
-                    :key="item.id"
-                    class="tool-button"
-                    :class="{ active: tool === item.id }"
-                    :aria-pressed="tool === item.id"
-                    :title="`${item.detail} (${item.key})`"
-                    :disabled="!store.hasPlan || store.busy"
-                    @click="chooseTool(item.id)"
-                >
-                    <PlanIcon :name="item.id" />
-                    <span>{{ item.label }}</span>
-                </button>
+            <div v-if="mode === 'browse'" class="browse-hint">
+                <PlanIcon name="room" />
+                <span>拖动看图 · 点房间或柜子看里面</span>
             </div>
-            <span class="tool-divider" />
-            <div class="history-group">
-                <button
-                    title="撤销 (Ctrl+Z)"
-                    aria-label="撤销"
-                    :disabled="!store.canUndo"
-                    @click="
-                        cancel();
-                        store.undo();
-                    "
-                >
-                    <PlanIcon name="undo" />
-                </button>
-                <button
-                    title="重做 (Ctrl+Shift+Z)"
-                    aria-label="重做"
-                    :disabled="!store.canRedo"
-                    @click="
-                        cancel();
-                        store.redo();
-                    "
-                >
-                    <PlanIcon name="redo" />
-                </button>
-            </div>
+            <template v-else>
+                <div class="tool-group">
+                    <button
+                        v-for="item in tools"
+                        :key="item.id"
+                        class="tool-button"
+                        :class="{ active: tool === item.id }"
+                        :aria-pressed="tool === item.id"
+                        :title="`${item.detail} (${item.key})`"
+                        :disabled="!store.hasPlan || store.busy"
+                        @click="chooseTool(item.id)"
+                    >
+                        <PlanIcon :name="item.id" />
+                        <span>{{ item.label }}</span>
+                    </button>
+                </div>
+                <span class="tool-divider" />
+                <div class="history-group">
+                    <button
+                        title="撤销 (Ctrl+Z)"
+                        aria-label="撤销"
+                        :disabled="!store.canUndo"
+                        @click="
+                            cancel();
+                            store.undo();
+                        "
+                    >
+                        <PlanIcon name="undo" />
+                    </button>
+                    <button
+                        title="重做 (Ctrl+Shift+Z)"
+                        aria-label="重做"
+                        :disabled="!store.canRedo"
+                        @click="
+                            cancel();
+                            store.redo();
+                        "
+                    >
+                        <PlanIcon name="redo" />
+                    </button>
+                </div>
+            </template>
         </div>
 
         <!--== 左下：视图开关与比例尺 ========================================-->
@@ -637,147 +1128,44 @@ async function exportSvg() {
             </button>
         </div>
 
-        <!--== 左侧卡片 · 家 =================================================-->
+        <!--== 右侧卡片 · 看内容（点房间 / 柜子） ==============================
+            只回答一个问题：这里面有什么。名称 + 总件数 + 物品清单，
+            其余（柜子清单、修改入口、面积说明）都不在这里出现，
+            卡片贴着左侧菜单的顶部起，高度撑到画板底部，清单自己滚。-->
         <FloatCard
-            v-if="menu === 'home'"
-            eyebrow="HOME"
-            side="left"
-            :title="store.plan?.name || '还没有家'"
-            :subtitle="`${store.rooms.length} 个空间 · ${totalArea} m² · ${openingCount} 处门窗`"
-            :width="304"
-            @close="menu = 'none'"
+            v-if="rightCard === 'browse'"
+            side="right"
+            :title="browseTitle"
+            :subtitle="browseCountLabel"
+            :width="330"
+            :top="50"
+            stretch
+            @close="browse = null"
         >
-            <div class="card-list">
+            <div class="card-list item-list">
                 <button
-                    v-for="(room, index) in store.rooms"
-                    :key="room.id"
-                    class="card-list-item"
-                    :class="{ active: room.id === store.selectedId }"
-                    :disabled="store.busy"
-                    @click="openRoom(room.id)"
+                    v-for="row in browseItemRows"
+                    :key="row.id"
+                    class="card-list-item item-row"
+                    :class="{ located: row.id === locatedItemId }"
+                    @click="locateItem(row.item)"
                 >
-                    <span class="item-index">{{ (index + 1).toString().padStart(2, '0') }}</span>
+                    <PlanIcon name="tag" />
                     <span class="item-main">
-                        {{ room.name }}
-                        <small>{{ room.openings.length }} 处门窗</small>
+                        {{ row.name }}
+                        <small>{{ row.meta }}</small>
                     </span>
-                    <span class="item-meta">
-                        {{ roomArea(room).toFixed(1) }}
-                        <small>m²</small>
-                    </span>
+                    <PlanIcon name="fit" />
                 </button>
-                <p v-if="!store.rooms.length" class="card-placeholder">
-                    还没有房间。用底部的「房间」工具在画布上拖出第一个空间。
+                <p v-if="!browseItems.length" class="card-placeholder">
+                    这里还是空的。开启修改模式，把东西登记进来。
                 </p>
             </div>
-            <template #footer>
-                <div class="card-actions">
-                    <button
-                        class="button"
-                        :disabled="!store.hasPlan || store.busy"
-                        @click="chooseTool('room')"
-                    >
-                        <PlanIcon name="plus" />
-                        绘制房间
-                    </button>
-                    <span class="save-state">
-                        <i
-                            :class="{
-                                saving: store.busy,
-                                failed: Boolean(store.errorMessage),
-                            }"
-                        />
-                        {{ saveLabel }}
-                    </span>
-                </div>
-            </template>
         </FloatCard>
 
-        <!--== 左侧卡片 · 储物设备 ===========================================-->
+        <!--== 右侧卡片 · 属性（仅修改模式） =================================-->
         <FloatCard
-            v-if="menu === 'storage'"
-            eyebrow="STORAGE"
-            side="left"
-            title="储物设备"
-            subtitle="柜、架、箱都挂在具体房间里，物品才有位置。"
-            :width="304"
-            @close="menu = 'none'"
-        >
-            <div class="card-list">
-                <button
-                    v-for="room in store.rooms"
-                    :key="room.id"
-                    class="card-list-item"
-                    :class="{ active: room.id === store.selectedId }"
-                    @click="openRoom(room.id)"
-                >
-                    <PlanIcon name="box" />
-                    <span class="item-main">
-                        {{ room.name }}
-                        <small>0 件储物设备</small>
-                    </span>
-                    <PlanIcon name="chevron" />
-                </button>
-                <p v-if="!store.rooms.length" class="card-placeholder">
-                    先画出房间，再往里放柜子与架子。
-                </p>
-            </div>
-            <p class="card-note">
-                储物设备的摆放与容量统计还在开发中；这里先留好入口，选中房间后可在「图纸」卡片里继续编辑。
-            </p>
-            <template #footer>
-                <button class="button full-width" disabled>
-                    <PlanIcon name="plus" />
-                    添加储物设备
-                </button>
-            </template>
-        </FloatCard>
-
-        <!--== 左侧卡片 · 添加物品 ===========================================-->
-        <FloatCard
-            v-if="menu === 'items'"
-            eyebrow="ITEMS"
-            side="left"
-            title="添加物品"
-            subtitle="选一个房间，记下它的名字与位置。"
-            :width="304"
-            @close="menu = 'none'"
-        >
-            <label class="field-label">
-                物品名称
-                <input v-model="itemName" maxlength="40" placeholder="例如：登山包" />
-            </label>
-            <label class="field-label">
-                所在房间
-                <select v-model="itemRoom" :disabled="!store.rooms.length">
-                    <option value="">未选择</option>
-                    <option v-for="room in store.rooms" :key="room.id" :value="room.id">
-                        {{ room.name }}
-                    </option>
-                </select>
-            </label>
-            <div class="property-section tight">
-                <h4>分类</h4>
-                <div class="chip-row">
-                    <button
-                        v-for="chip in itemCategories"
-                        :key="chip"
-                        :class="{ chosen: itemCategory === chip }"
-                        @click="itemCategory = chip"
-                    >
-                        {{ chip }}
-                    </button>
-                </div>
-            </div>
-            <p class="card-note">物品登记还没接入数据库，当前只是界面骨架。</p>
-            <template #footer>
-                <button class="button primary full-width" disabled>保存物品</button>
-            </template>
-        </FloatCard>
-
-        <!--== 右侧卡片 · 图纸 / 详情 ========================================-->
-        <FloatCard
-            v-if="detail"
+            v-else-if="rightCard === 'property'"
             side="right"
             :eyebrow="selectedOpening ? 'OPENING' : selectedRoom ? 'ROOM' : 'OVERVIEW'"
             :title="selectedOpening ? '门窗属性' : selectedRoom ? '房间属性' : '图纸概览'"
@@ -866,30 +1254,61 @@ async function exportSvg() {
                             <p>{{ roomArea(selectedRoom).toFixed(1) }} m² · 墙体中心线</p>
                         </div>
                     </div>
-                    <label class="field-label">
-                        空间名称
-                        <input
-                            v-model="name"
-                            aria-label="空间名称"
-                            maxlength="40"
-                            :disabled="store.busy"
-                            @change="rename()"
-                            @keydown.enter="($event.target as HTMLInputElement).blur()"
-                        />
-                    </label>
-                    <div class="chip-row">
-                        <button
-                            v-for="preset in presets"
-                            :key="preset"
-                            :class="{ chosen: selectedRoom.name === preset }"
-                            :disabled="store.busy"
-                            @click="rename(preset)"
-                        >
-                            {{ preset }}
-                        </button>
+                    <!-- 浏览模式下这里是只读概况；改名、尺寸、材质、门窗、
+                         删除全收进修改模式，避免看着看着手一滑就改坏了。-->
+                    <div v-if="mode === 'browse'" class="readonly-facts">
+                        <div>
+                            <span>宽度</span>
+                            <b>{{ mm(selectedRoom.width) }} mm</b>
+                        </div>
+                        <div>
+                            <span>进深</span>
+                            <b>{{ mm(selectedRoom.height) }} mm</b>
+                        </div>
+                        <div>
+                            <span>门窗</span>
+                            <b>{{ selectedRoom.openings.length }} 处</b>
+                        </div>
+                        <div>
+                            <span>地面</span>
+                            <b>{{ selectedFloorLabel }}</b>
+                        </div>
                     </div>
+                    <button
+                        v-if="mode === 'browse'"
+                        class="button full-width"
+                        :disabled="!store.hasPlan || store.busy"
+                        @click="toggleMode"
+                    >
+                        <PlanIcon name="room" />
+                        修改这个房间
+                    </button>
+                    <template v-if="mode === 'edit'">
+                        <label class="field-label">
+                            空间名称
+                            <input
+                                v-model="name"
+                                aria-label="空间名称"
+                                maxlength="40"
+                                :disabled="store.busy"
+                                @change="rename()"
+                                @keydown.enter="($event.target as HTMLInputElement).blur()"
+                            />
+                        </label>
+                        <div class="chip-row">
+                            <button
+                                v-for="preset in presets"
+                                :key="preset"
+                                :class="{ chosen: selectedRoom.name === preset }"
+                                :disabled="store.busy"
+                                @click="rename(preset)"
+                            >
+                                {{ preset }}
+                            </button>
+                        </div>
+                    </template>
                 </div>
-                <div class="property-section">
+                <div v-if="mode === 'edit'" class="property-section">
                     <h4>
                         空间尺寸
                         <span>mm</span>
@@ -924,7 +1343,7 @@ async function exportSvg() {
                     </div>
                     <p class="field-help">按墙体中心线计算；不作为套内净面积或建筑面积。</p>
                 </div>
-                <div class="property-section">
+                <div v-if="mode === 'edit'" class="property-section">
                     <h4>地面材质</h4>
                     <div class="material-options">
                         <button
@@ -945,7 +1364,7 @@ async function exportSvg() {
                         橡木地板、大砖、小方砖会按房间名自动推断；手动选过之后不再跟随改名。
                     </p>
                 </div>
-                <div class="property-section">
+                <div v-if="mode === 'edit'" class="property-section">
                     <h4>
                         门窗
                         <span>{{ selectedRoom.openings.length }}</span>
@@ -981,7 +1400,192 @@ async function exportSvg() {
                         </button>
                     </div>
                 </div>
-                <div class="property-section">
+                <!-- 柜子与物品：只有修改模式才出现表单，浏览模式在右侧「看内容」卡片里 -->
+                <div v-if="mode === 'edit'" class="property-section">
+                    <h4>
+                        柜子
+                        <span>{{ roomStorage.length }}</span>
+                    </h4>
+                    <div class="card-list">
+                        <button
+                            v-for="device in roomStorage"
+                            :key="device.id"
+                            class="card-list-item"
+                            @click="pickStorage(device.id)"
+                        >
+                            <PlanIcon :name="iconOfKind(device.kind)" />
+                            <span class="item-main">
+                                {{ device.name }}
+                                <small>{{ itemsOfStorage(device.id).length }} 件物品</small>
+                            </span>
+                            <span
+                                class="row-action"
+                                title="删除这个柜子"
+                                role="button"
+                                tabindex="0"
+                                @click.stop="store.removeStorage(device.id)"
+                                @keydown.enter.stop="store.removeStorage(device.id)"
+                            >
+                                <PlanIcon name="trash" />
+                            </span>
+                        </button>
+                        <p v-if="!roomStorage.length" class="field-help">
+                            还没有柜子。选个类型加一个，物品就能挂进去。
+                        </p>
+                    </div>
+                    <div class="storage-form">
+                        <div class="chip-row">
+                            <button
+                                v-for="kind in storageKinds"
+                                :key="kind.id"
+                                :class="{ chosen: newStorageKind === kind.id }"
+                                :disabled="store.busy"
+                                @click="newStorageKind = kind.id"
+                            >
+                                {{ kind.label }}
+                            </button>
+                        </div>
+                        <label class="field-label">
+                            柜子名称
+                            <input
+                                v-model="newStorageName"
+                                aria-label="柜子名称"
+                                maxlength="30"
+                                :placeholder="
+                                    storageKinds.find((kind) => kind.id === newStorageKind)?.label
+                                "
+                                :disabled="store.busy"
+                                @keydown.enter="submitStorage"
+                            />
+                        </label>
+                        <button
+                            class="button full-width"
+                            :disabled="store.busy"
+                            @click="submitStorage"
+                        >
+                            <PlanIcon name="plus" />
+                            加一个柜子
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="mode === 'edit'" class="property-section">
+                    <h4>
+                        物品
+                        <span>{{ roomItems.length }}</span>
+                    </h4>
+                    <div class="card-list">
+                        <button
+                            v-for="item in roomItems"
+                            :key="item.id"
+                            class="card-list-item"
+                            @click="locateItem(item)"
+                        >
+                            <PlanIcon name="tag" />
+                            <span class="item-main">
+                                {{ item.name }}
+                                <small>
+                                    {{ item.category }}
+                                    <template v-if="item.quantity > 1">
+                                        · {{ item.quantity }} 件
+                                    </template>
+                                    ·
+                                    {{
+                                        item.storageId
+                                            ? (deviceOf(item.storageId)?.name ?? '柜子')
+                                            : '未入柜'
+                                    }}
+                                </small>
+                            </span>
+                            <span
+                                class="row-action"
+                                title="删除这件物品"
+                                role="button"
+                                tabindex="0"
+                                @click.stop="store.removeItem(item.id)"
+                                @keydown.enter.stop="store.removeItem(item.id)"
+                            >
+                                <PlanIcon name="trash" />
+                            </span>
+                        </button>
+                        <p v-if="!roomItems.length" class="field-help">还没有登记物品。</p>
+                    </div>
+                    <div class="item-form">
+                        <label class="field-label">
+                            物品名称
+                            <input
+                                v-model="itemName"
+                                aria-label="物品名称"
+                                maxlength="40"
+                                placeholder="例如：换季被褥"
+                                :disabled="store.busy"
+                                @keydown.enter="submitItem"
+                            />
+                        </label>
+                        <div class="chip-row">
+                            <button
+                                v-for="category in itemCategories"
+                                :key="category"
+                                :class="{ chosen: itemCategory === category }"
+                                :disabled="store.busy"
+                                @click="itemCategory = category"
+                            >
+                                {{ category }}
+                            </button>
+                        </div>
+                        <div class="size-fields">
+                            <label class="field-label">
+                                数量
+                                <input
+                                    v-model.number="itemQuantity"
+                                    aria-label="物品数量"
+                                    type="number"
+                                    min="1"
+                                    max="9999"
+                                    :disabled="store.busy"
+                                />
+                            </label>
+                            <label class="field-label">
+                                放在
+                                <select
+                                    v-model="itemStorageId"
+                                    aria-label="放在哪个柜子"
+                                    :disabled="store.busy"
+                                >
+                                    <option :value="null">房间空位</option>
+                                    <option
+                                        v-for="device in roomStorage"
+                                        :key="device.id"
+                                        :value="device.id"
+                                    >
+                                        {{ device.name }}
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+                        <label class="field-label">
+                            备注
+                            <input
+                                v-model="itemNote"
+                                aria-label="物品备注"
+                                maxlength="200"
+                                placeholder="选填，例如：顶层左侧"
+                                :disabled="store.busy"
+                            />
+                        </label>
+                        <p v-if="itemFormError" class="field-help error">{{ itemFormError }}</p>
+                        <button
+                            class="button full-width"
+                            :disabled="store.busy"
+                            @click="submitItem"
+                        >
+                            <PlanIcon name="plus" />
+                            登记这件物品
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="mode === 'edit'" class="property-section">
                     <button
                         class="button danger full-width"
                         :disabled="store.busy"
@@ -1060,6 +1664,42 @@ async function exportSvg() {
                 <p class="card-note">
                     100 mm 网格吸附 · 共享墙只绘制一次 · 修改自动保存，可随时撤销
                 </p>
+            </template>
+        </FloatCard>
+
+        <!--== 右侧卡片 · 清单（点左侧 房间 / 家具 / 储物） =================-->
+        <FloatCard
+            v-else-if="rightCard === 'list'"
+            side="right"
+            :eyebrow="listEyebrow"
+            :title="listTitle"
+            :subtitle="listSubtitle"
+            :width="322"
+            @close="goMenu('home')"
+        >
+            <div class="card-list">
+                <button
+                    v-for="entry in listEntries"
+                    :key="entry.id"
+                    class="card-list-item"
+                    :class="{ active: entry.id === browse?.id }"
+                    @click="entry.kind === 'room' ? openRoom(entry.id) : openStorage(entry.id)"
+                >
+                    <PlanIcon :name="entry.icon" />
+                    <span class="item-main">
+                        {{ entry.title }}
+                        <small>{{ entry.detail }}</small>
+                    </span>
+                    <span class="item-count">{{ entry.count }}</span>
+                    <PlanIcon name="chevron" />
+                </button>
+                <p v-if="!listEntries.length" class="card-placeholder">{{ listEmpty }}</p>
+            </div>
+            <template v-if="!listEntries.length" #footer>
+                <button class="button full-width" @click="toggleMode">
+                    <PlanIcon name="plus" />
+                    {{ mode === 'edit' ? '正在修改' : '开始修改' }}
+                </button>
             </template>
         </FloatCard>
 
