@@ -52,7 +52,15 @@ const ticks = (x: number, y: number) => `M ${x - 3} ${y + 4} l 6 -8`;
 </script>
 
 <template>
-    <g data-plan-drawing="true" font-family="'Microsoft YaHei', 'PingFang SC', sans-serif">
+    <!--
+        图纸里的文字用行内 font-family 而不是 CSS 变量：这份 SVG 会被序列化导出成独立文件，
+        导出后没有 CSS 上下文，只有写在属性上的字体栈才能跟着走。
+        字体栈与 --font-sans 保持一致；导出文件在没装文楷的机器上会退到系统中文黑体。
+    -->
+    <g
+        data-plan-drawing="true"
+        font-family="'LXGW WenKai Screen', 'Microsoft YaHei', 'PingFang SC', sans-serif"
+    >
         <defs>
             <pattern id="plan-wood" width="54" height="18" patternUnits="userSpaceOnUse">
                 <rect width="54" height="18" fill="#f5f0e6" />
@@ -159,7 +167,12 @@ const ticks = (x: number, y: number) => `M ${x - 3} ${y + 4} l 6 -8`;
                 >
                     {{ room.name }}
                 </text>
-                <text font-size="9.5" fill="#8a948d" y="15" font-family="Consolas, monospace">
+                <text
+                    font-size="9.5"
+                    fill="#8a948d"
+                    y="15"
+                    font-family="'LXGW WenKai Screen', Consolas, monospace"
+                >
                     {{ roomArea(room).toFixed(1) }} m²
                 </text>
             </g>
@@ -196,7 +209,7 @@ const ticks = (x: number, y: number) => `M ${x - 3} ${y + 4} l 6 -8`;
                         stroke="none"
                         text-anchor="middle"
                         font-size="9"
-                        font-family="Consolas, monospace"
+                        font-family="'LXGW WenKai Screen', Consolas, monospace"
                     >
                         {{ dim.label }}
                     </text>
@@ -217,7 +230,7 @@ const ticks = (x: number, y: number) => `M ${x - 3} ${y + 4} l 6 -8`;
                         stroke="none"
                         text-anchor="middle"
                         font-size="9"
-                        font-family="Consolas, monospace"
+                        font-family="'LXGW WenKai Screen', Consolas, monospace"
                     >
                         {{ dim.label }}
                     </text>

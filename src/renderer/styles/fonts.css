@@ -1,0 +1,37 @@
+/*============================================================================
+  fonts — 随包分发的霞鹜文楷
+
+  LXGW WenKai Screen 是「霞鹜文楷」的屏幕优化版：小字号下笔画更实、字距更紧，
+  专为界面阅读调过，比印刷版更适合这里。字体文件随产物一起打包，
+  不依赖用户机器有没有装过 —— 桌面应用必须字体自足，否则同一份界面
+  在不同电脑上会排成两副样子。
+
+  只带两档真字重：400（Regular）与 500（Medium）。设计里实际用到的字重
+  就是这两档，多带一档等于白占 9 MB。600 / 700 由 Medium 覆盖（声明成
+  字重区间 500–700），而不是让浏览器合成假粗体 —— 文楷的合成粗体会把
+  笔锋糊成一团，比不加粗更难看；同时 base.css 里关掉了 font-synthesis 兜底。
+
+  授权：SIL OFL 1.1，允许随软件分发。授权全文放在 public/OFL-LXGW-WenKai.txt，
+  构建时原样拷进 dist/renderer 根目录，随安装包一起发布。
+  注意 OFL 的附加条款：这份 woff2 只能作为网页字体随应用分发，不能单独再发布成
+  可安装的桌面字体 —— 保持现状（只被 @font-face 引用）就满足要求。
+============================================================================*/
+
+@font-face {
+    font-family: 'LXGW WenKai Screen';
+    src: url('../assets/fonts/lxgw-wenkai-regular.woff2') format('woff2');
+    /* 声明成区间而不是 400：300 之类更细的请求也落在 Regular 上，不会回落系统字体 */
+    font-weight: 300 400;
+    font-style: normal;
+    /* 本地文件，加载在几十毫秒内；用 block 避免启动瞬间先闪一版系统黑体再跳字 */
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'LXGW WenKai Screen';
+    src: url('../assets/fonts/lxgw-wenkai-medium.woff2') format('woff2');
+    /* 500–700：Medium 覆盖设计里的 500 强调与 600 小标题，粗体一律不合成 */
+    font-weight: 500 700;
+    font-style: normal;
+    font-display: block;
+}

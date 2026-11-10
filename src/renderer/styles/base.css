@@ -1,3 +1,4 @@
+@import './fonts.css';
 @import './tokens.css';
 @import './theme.css';
 
@@ -5,7 +6,8 @@
   base — 全局重置与基础排版
 
   只做重置和最小排版，布局一律交给组件自身的 scoped 样式。
-  导入顺序固定 tokens → theme，theme 可引用 token。
+  导入顺序固定 fonts → tokens → theme：@font-face 必须先声明，主题令牌随后，
+  这样 theme 里引用字体家族时字体已经就绪。
 ============================================================================*/
 
 *,
@@ -28,6 +30,9 @@ body {
     color: var(--fg);
     background: var(--bg);
     -webkit-font-smoothing: antialiased;
+    /* 文楷只带 400/500 两个真字重，600/700 都指到 Medium。
+       关掉合成加粗：合成的假粗体会把楷书笔锋糊成一团，宁可停在 Medium。 */
+    font-synthesis: none;
     /* 桌面应用不需要整页滚动，滚动一律发生在具体面板内部。 */
     overflow: hidden;
     /* 窗口自绘：默认禁用文本选择与拖拽，标题栏的拖拽区域另行声明 */

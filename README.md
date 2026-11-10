@@ -37,7 +37,9 @@ src/
     ├── features/floor-plan/ # 户型图画板（SVG 渲染）
     ├── lib/plan-geometry.ts # 墙段切分、门弧、窗线、八方向缩放的纯函数
     ├── stores/floor-plan.ts # 户型图与房间状态
-    └── styles/            # tokens / theme / base
+    ├── assets/fonts/      # 随包分发的 woff2 字体
+    ├── public/            # 原样拷进 dist 根的文件（字体授权全文）
+    └── styles/            # fonts / tokens / theme / base
 tests/                     # node:test 用例（几何、schema、存储规则）
 design/                    # 界面语言与主题提案（theme-proposal.html）
 ```
@@ -57,6 +59,17 @@ design/                    # 界面语言与主题提案（theme-proposal.html�
 当前主题为 **苔痕 · 竹青**：竹青 `#3f5a2a` 作主色，赭石 `#8a5a2b` 作次强调，朱红 `#b03a2e` 只用于危险操作。全部颜色集中在 `src/renderer/styles/theme.css`，`tokens.css` 只放刻度（间距、字号、圆角、标题栏高度、网格尺寸）。
 
 另外三套候选主题（宣纸·朱砂 / 墨夜·朱砂 / 檀木·赭石）保留在 `design/theme-proposal.html`，可直接在浏览器里打开对比，将来要做暗色模式或换肤时从这里取色。
+
+## 字体
+
+全站统一使用 **霞鹜文楷 · 屏幕版**（LXGW WenKai Screen），随包分发，不依赖用户机器是否装过 —— 桌面应用必须字体自足，否则同一份界面在不同电脑上排成两副样子。
+
+- `src/renderer/assets/fonts/` 放两份 woff2（Regular 9.8 MB / Medium 8.7 MB），`styles/fonts.css` 里用 `@font-face` 声明同一个家族 `'LXGW WenKai Screen'`，字重区间分别为 `300 400` 与 `500 700`。
+- `fonts.css` 必须在 `tokens.css` / `theme.css` 之前导入（见 `base.css` 顶部），保证主题令牌引用该家族时字体已注册。
+- `theme.css` 里 `--font-serif` / `--font-sans` / `--font-mono` 三个令牌全部以该家族打头，后面的系统字体只作加载失败兜底。文楷数字等宽（0.6em），所以面积、尺寸、房间编号等等宽场景也直接用它，不再引 Consolas。
+- 全局关掉 `font-synthesis`：只有 400 / 500 两档真字重，600 / 700 落到 Medium。合成假粗体会把楷书笔锋糊成一团，宁可停在 Medium。
+- 唯一需要写死字体栈的地方是 `features/floor-plan/plan-drawing.vue`：图纸 SVG 会被序列化导出成独立文件，导出后没有 CSS 上下文，字体只能写在元素属性上，所以那里是行内 `font-family` 而非 CSS 变量。
+- 授权 SIL OFL 1.1，全文在 `src/renderer/public/OFL-LXGW-WenKai.txt`，构建时原样拷进 `dist/renderer` 根目录随安装包发布。附加条款只允许转换后的 woff2 作网页字体使用，不能再单独发布成可安装桌面字体；当前用法（仅被 `@font-face` 引用）符合要求。
 
 ## 命令
 

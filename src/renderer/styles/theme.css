@@ -88,12 +88,16 @@
     --sto-line: rgba(138, 90, 43, 0.46);
     --sto-text: #7c4e23;
 
-    /*== 字体家族 ==*/
-    --font-serif: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
+    /*== 字体家族 ==
+       全站统一用霞鹜文楷屏幕版（随包分发，见 fonts.css）。
+       文楷自带楷书骨架，衬线与正文共用一套即可，不再需要单独的宋体/黑体家族；
+       后面的系统字体只是字体文件加载失败时的兜底。
+       文楷的数字是等宽的（0.6em），所以等宽场景也直接用它，不另外引 Consolas。 */
+    --font-serif: 'LXGW WenKai Screen', 'Noto Serif SC', 'Songti SC', Georgia, serif;
     --font-sans:
-        'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui,
-        sans-serif;
-    --font-mono: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+        'LXGW WenKai Screen', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+        'Noto Sans CJK SC', system-ui, sans-serif;
+    --font-mono: 'LXGW WenKai Screen', 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
 
     /*== 过渡节奏 ==*/
     --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
