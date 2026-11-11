@@ -43,7 +43,7 @@ svg {
 }
 
 /*------------------------------------------------------------------------------
-  画板
+  画板：铺满整个窗口，图纸就是背景
 ------------------------------------------------------------------------------*/
 
 .canvas-wrap {
@@ -61,68 +61,6 @@ svg {
     outline: none;
 }
 
-/* 图纸角标与指北针压在画板上，纯装饰不接收事件。
-   角标放左下：左上那一片从 50px 往下是菜单列（6 个按钮 ≈ 300px 高），
-   角标原来贴 left: 24 / top: 58，正好被压在按钮底下看不着。
-   左下这一列只有视图开关（bottom 22–85）和指北针（bottom 118–170），
-   角标落在 bottom 190 起，三者竖排互不遮挡。 */
-.sheet-label {
-    position: absolute;
-    left: 24px;
-    bottom: 190px;
-    display: flex;
-    gap: 11px;
-    align-items: center;
-    pointer-events: none;
-}
-
-.sheet-label > span {
-    display: grid;
-    place-items: center;
-    width: 29px;
-    height: 31px;
-    border: 1px solid var(--line-strong);
-    color: var(--fg-subtle);
-    font: 12px var(--font-mono);
-}
-
-.sheet-label strong {
-    display: block;
-    font: 400 14px var(--font-serif);
-    letter-spacing: 2px;
-    color: var(--fg-muted);
-}
-
-.sheet-label small {
-    display: block;
-    margin-top: 5px;
-    font: 8px var(--font-mono);
-    letter-spacing: 0.7px;
-    color: var(--fg-subtle);
-}
-
-.north-mark {
-    position: absolute;
-    left: 26px;
-    bottom: 118px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    color: var(--fg-subtle);
-    pointer-events: none;
-}
-
-.north-mark > span {
-    font-size: 8px;
-    margin-bottom: 4px;
-    letter-spacing: 1px;
-}
-
-.north-mark > svg {
-    width: 21px;
-    height: 40px;
-}
-
 /*------------------------------------------------------------------------------
   悬浮件的公共底：毛玻璃 + 细边 + 一点投影，浮在图纸上也不抢视线。
 ------------------------------------------------------------------------------*/
@@ -130,8 +68,8 @@ svg {
 .float-search,
 .float-rail,
 .float-toolbar,
-.float-pill,
-.float-stack {
+.float-dock,
+.float-zoom {
     -webkit-app-region: no-drag;
 }
 
@@ -330,7 +268,7 @@ svg {
 /* 底部居中：绘图工具 + 撤销重做 */
 .float-toolbar {
     position: absolute;
-    bottom: 22px;
+    bottom: 60px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 32;
@@ -431,112 +369,191 @@ svg {
     height: 15px;
 }
 
-/* 一切「胶囊」的公共底 */
-.float-pill {
+/*------------------------------------------------------------------------------
+  底部底栏：图纸信息 + 图层开关 + 比例尺 + 缩放，全在一条线上
+  这些原来散成四块（左下复选框、左下方比例尺、右下缩放、左下角标、左侧指北针），
+  四五颗小胶囊各占一个角，视线要来回跳。现在按「这是什么 → 看哪些图层 →
+  多大 → 缩放到多少」从左到右排，分组之间一条竖线，一眼能扫完。
+------------------------------------------------------------------------------*/
+
+/* 左下：图纸信息 + 图层开关 + 比例尺。刻意做小做矮，画板优先。 */
+.float-dock {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    z-index: 31;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 5px;
+    gap: 8px;
+    width: max-content;
+    max-width: calc(100% - 28px);
+    height: 34px;
+    padding: 0 7px 0 7px;
     background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: 11px;
     box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(10px) saturate(1.1);
+    backdrop-filter: blur(12px) saturate(1.1);
+    color: var(--fg-muted);
 }
 
-/* 左下：视图开关 + 比例尺，两件竖排 */
-.float-stack.stack-left {
+/* 右下：缩放单独一条，和左下分开。 */
+.float-zoom {
     position: absolute;
-    left: 20px;
-    bottom: 22px;
-    z-index: 32;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-}
-
-.view-options {
-    gap: 12px;
-    padding: 8px 12px;
-}
-
-.view-options label {
+    right: 14px;
+    bottom: 14px;
+    z-index: 31;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 2px;
+    height: 34px;
+    padding: 0 5px;
+    background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(12px) saturate(1.1);
     color: var(--fg-muted);
-    font-size: 10px;
-    cursor: pointer;
 }
 
-input[type='checkbox'] {
+.dock-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.dock-sheet {
+    flex: 0 1 auto;
+    overflow: hidden;
+    max-width: 240px;
+}
+
+.sheet-no {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 19px;
+    height: 19px;
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    color: var(--fg-subtle);
+    font: 9px var(--font-mono);
+}
+
+.sheet-title {
+    overflow: hidden;
+    color: var(--fg-muted);
+    font: 400 12px var(--font-serif);
+    letter-spacing: 0.6px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dock-north {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
     width: 12px;
-    height: 12px;
-    margin: 0;
-    accent-color: var(--brand);
+    height: 18px;
+    color: var(--fg-subtle);
 }
 
+.dock-north svg {
+    width: 9px;
+    height: 16px;
+}
+
+/* 分组之间的竖线 */
+.dock-divider {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 16px;
+    background: var(--line);
+}
+
+/* 图层开关：三枚开关做成一段分段控件，比三个复选框干净得多 */
+.dock-views {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    align-items: center;
+    gap: 1px;
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--sunken);
+}
+
+.dock-views button {
+    height: 22px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--fg-subtle);
+    font-size: 10.5px;
+}
+
+.dock-views button:hover {
+    color: var(--fg-muted);
+}
+
+.dock-views button.active {
+    background: var(--surface-raised);
+    color: var(--brand);
+}
+
+/* 比例尺：一段随缩放变长的横线 + 「1 m」 */
 .scale-ruler {
-    padding-left: 2px;
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
     color: var(--fg-subtle);
     pointer-events: none;
 }
 
 .scale-ruler div {
-    height: 5px;
+    height: 4px;
     min-width: 10px;
+    max-width: 160px;
     border: 1px solid var(--fg-subtle);
     border-top: none;
 }
 
 .scale-ruler span {
-    display: block;
-    margin-top: 4px;
+    font: 8px var(--font-mono);
+    letter-spacing: 0.4px;
     text-align: center;
-    font: 9px var(--font-mono);
 }
 
-/* 右下：缩放 */
-.zoom-controls {
-    position: absolute;
-    right: 16px;
-    bottom: 22px;
-    z-index: 32;
-}
-
-.zoom-controls button {
+/* 缩放：− 百分比 + | + 适应画布 */
+.float-zoom button {
     display: grid;
     place-items: center;
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: 6px;
     background: transparent;
     color: var(--fg-muted);
 }
 
-.zoom-controls button:hover:not(:disabled) {
+.float-zoom button:hover:not(:disabled) {
     background: var(--sunken);
     color: var(--brand);
 }
 
-.zoom-controls .zoom-value {
-    width: 46px;
+.float-zoom .zoom-value {
+    width: 40px;
     font: 10px var(--font-mono);
 }
 
-.zoom-controls svg {
-    width: 15px;
-    height: 15px;
-}
-
-.zoom-controls > span {
-    width: 1px;
-    height: 17px;
-    margin: 0 3px;
-    background: var(--line);
+.float-zoom svg {
+    width: 13px;
+    height: 13px;
 }
 
 /*------------------------------------------------------------------------------
@@ -1338,6 +1355,20 @@ input[type='checkbox'] {
     .search-box kbd {
         display: none;
     }
+
+    /* 底栏收紧：比例尺最多 90px */
+    .scale-ruler div {
+        max-width: 90px;
+    }
+}
+
+/* 再窄一档：图纸角标整块收起，只留图层开关和比例尺。
+   图名在左侧菜单里已经能看到，不必挤在底栏里。 */
+@media (max-width: 940px) {
+    .dock-sheet,
+    .dock-sheet + .dock-divider {
+        display: none;
+    }
 }
 
 @media (max-height: 720px) {
@@ -1352,15 +1383,6 @@ input[type='checkbox'] {
 
     .onboarding form {
         margin-top: 8px;
-    }
-
-    .north-mark {
-        display: none;
-    }
-
-    /* 指北针收起了，角标补到它原来的位置附近，左边一列仍然不撞视图开关。 */
-    .sheet-label {
-        bottom: 112px;
     }
 }
 

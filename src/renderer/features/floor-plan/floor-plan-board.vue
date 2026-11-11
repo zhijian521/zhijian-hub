@@ -6,9 +6,8 @@
   所有控件都是浮在画布上的「悬浮件」：
     · 顶部居中 —— 快捷搜索（物品 / 储物设备 / 房间）
     · 左上角   —— 菜单（首页 / 房间 / 家具 / 储物 / 修改 / 图纸 / 导出）
-    · 底部居中 —— 绘图工具与撤销重做（仅修改模式）
-    · 左下角   —— 视图开关、比例尺与图纸角标
-    · 右下角   —— 缩放
+    · 底部居中 —— 绘图工具与撤销重做（仅修改模式，浮在底栏之上）
+    · 底部整条 —— 一条底栏：图纸角标 · 图层开关 · 比例尺 · 缩放
 
   右侧是唯一的详情区，三种内容互斥：
     · 看内容 —— 点房间或柜子，列出里面存着的东西（浏览模式的主视角）
@@ -145,6 +144,17 @@ const openingWidth = ref(900);
 const openingPosition = ref(0);
 const exportRef = ref<SVGSVGElement | null>(null);
 const exporting = ref(false);
+
+/* 比例尺：60px = 1 m（PX_PER_METER），缩放后实际长度是 60 * zoom。
+   固定写「1 m」在小缩放下只剩十几像素，读不出长度；改成从整长度里挑一个
+   落在 60–150px 的档位，横线和文字一起变，比例尺才始终可用。 */
+const SCALE_STEPS = [0.5, 1, 2, 5, 10, 20];
+const scaleBar = computed(() => {
+    const pxPerMeter = 60 * zoom.value;
+    const fitStep = SCALE_STEPS.filter((meters) => pxPerMeter * meters <= 150).pop();
+    const meters = fitStep ?? SCALE_STEPS[0];
+    return { meters, width: Math.max(14, Math.round(pxPerMeter * meters)), label: `${meters} m` };
+});
 
 const totalArea = computed(() =>
     rooms.value.reduce((sum, r) => sum + (r.width * r.height) / 3600, 0).toFixed(1),
@@ -915,21 +925,7 @@ async function exportSvg() {
                 </g>
             </svg>
 
-            <!--== 图纸角标 ==-->
-            <div class="sheet-label">
-                <span>01</span>
-                <div>
-                    <strong>{{ store.plan?.name || '住宅平面图' }}</strong>
-                    <small>FLOOR PLAN · 尺寸单位 mm</small>
-                </div>
-            </div>
-            <div class="north-mark" aria-label="图纸上方">
-                <span>图纸上方</span>
-                <svg viewBox="0 0 24 42" aria-hidden="true">
-                    <path d="M12 2L4 28l8-5 8 5z" fill="none" stroke="currentColor" />
-                    <path d="M12 2v35" stroke="currentColor" />
-                </svg>
-            </div>
+            <!-- 图纸角标与指北针已收进左下角那条底栏，见下方 float-dock。 -->
 
             <!--== 画布提示层 ==-->
             <div v-if="store.status === 'loading'" class="canvas-overlay">
@@ -1131,30 +1127,61 @@ async function exportSvg() {
             </template>
         </div>
 
-        <!--== 左下：视图开关与比例尺 ========================================-->
-        <div class="float-stack stack-left">
-            <div v-if="store.hasPlan" class="float-pill view-options">
-                <label>
-                    <input v-model="showDimensions" type="checkbox" />
-                    尺寸
-                </label>
-                <label>
-                    <input v-model="showMaterials" type="checkbox" />
-                    材质
-                </label>
-                <label>
-                    <input v-model="showGrid" type="checkbox" />
-                    网格
-                </label>
+        <!--== 底部：左下「看图纸」、右下「缩放」，两条分开 ====================
+             左下只留三样：图纸编号与图名、图层开关、比例尺 —— 高度压到 34px，
+             尽量把画板让出来。缩放单独放右下角，两者互不牵连。
+             绘制工具条与浏览提示仍浮在左下底栏上方（见 float-toolbar）。-->
+        <footer v-if="store.hasPlan" class="float-dock" aria-label="图纸信息与视图控制">
+            <div class="dock-group dock-sheet">
+                <span class="sheet-no">01</span>
+                <span class="sheet-title">{{ store.plan?.name || '住宅平面图' }}</span>
+                <span class="dock-north" title="图纸上方" aria-label="图纸上方">
+                    <svg viewBox="0 0 24 42" aria-hidden="true">
+                        <path d="M12 2L4 28l8-5 8 5z" fill="none" stroke="currentColor" />
+                        <path d="M12 2v35" stroke="currentColor" />
+                    </svg>
+                </span>
             </div>
-            <div class="scale-ruler">
-                <div :style="{ width: `${60 * zoom}px` }" />
-                <span>1 m</span>
-            </div>
-        </div>
 
-        <!--== 右下：缩放 ====================================================-->
-        <div class="float-pill zoom-controls">
+            <span class="dock-divider" />
+
+            <div class="dock-views" role="group" aria-label="图层显示">
+                <button
+                    :class="{ active: showDimensions }"
+                    :aria-pressed="showDimensions"
+                    title="显示房间尺寸标注"
+                    @click="showDimensions = !showDimensions"
+                >
+                    尺寸
+                </button>
+                <button
+                    :class="{ active: showMaterials }"
+                    :aria-pressed="showMaterials"
+                    title="显示地面材质"
+                    @click="showMaterials = !showMaterials"
+                >
+                    材质
+                </button>
+                <button
+                    :class="{ active: showGrid }"
+                    :aria-pressed="showGrid"
+                    title="显示 100 mm 网格"
+                    @click="showGrid = !showGrid"
+                >
+                    网格
+                </button>
+            </div>
+
+            <span class="dock-divider" />
+
+            <div class="scale-ruler" :title="`图上 ${scaleBar.label} 的实际长度`">
+                <div :style="{ width: `${scaleBar.width}px` }" />
+                <span>{{ scaleBar.label }}</span>
+            </div>
+        </footer>
+
+        <!-- 缩放单独一条，钉在右下角。 -->
+        <div v-if="store.hasPlan" class="float-zoom" role="group" aria-label="缩放">
             <button aria-label="缩小" title="缩小" @click="setZoom(zoom / 1.2)">
                 <PlanIcon name="minus" />
             </button>
@@ -1164,7 +1191,7 @@ async function exportSvg() {
             <button aria-label="放大" title="放大" @click="setZoom(zoom * 1.2)">
                 <PlanIcon name="plus" />
             </button>
-            <span />
+            <span class="dock-divider" />
             <button aria-label="适应画布" title="适应画布 (0)" @click="fit">
                 <PlanIcon name="fit" />
             </button>
