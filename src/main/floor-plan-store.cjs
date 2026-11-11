@@ -65,8 +65,36 @@ const FLOORS = new Set([
     'carpet',
 ]);
 
-/** 储物设备的四种形态。只影响图标与画布排布，不影响归属关系。 */
+/** 家具的四种形态。只影响图标与画布排布，不影响归属关系。
+ * 家具与储物是一件事：柜子、床、冰箱都是"房间里放东西的地方"。 */
 const STORAGE_KINDS = new Set(['cabinet', 'shelf', 'box', 'furniture']);
+
+/** 家具能被缩到的最小边长：20px ≈ 330 mm，再小就只剩一个点。 */
+const MIN_FURNITURE_SIZE = 20;
+
+/** 单件家具的边长上限 600px = 10 m，超过就是数据写错了。 */
+const MAX_FURNITURE_SIDE = 600;
+
+/** 家具只允许直角四档转角：户型图上斜着摆的家具没有意义。 */
+const FURNITURE_ROTATIONS = new Set([0, 90, 180, 270]);
+
+/** 脏数据一律当 0 度：宁可画成正的，也不要画成一个歪的方框。 */
+function normalizeRotation(value) {
+    return FURNITURE_ROTATIONS.has(value) ? value : 0;
+}
+
+/** 从原始对象里读可空数字：读不到一律 null，表示这件家具还没摆过位置。 */
+function optionalNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** 家具原型 id 只做长度校验：原型清单在渲染层，主进程不复制一份。 */
+function optionalPreset(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value !== 'string') fail('家具原型无效');
+    if (value.length > MAX_NAME_LENGTH) fail('家具原型无效');
+    return value;
+}
 
 /** 物品数量上限：再大就不是"记一下在哪"，而是进销存了。 */
 const MAX_QUANTITY = 9999;
@@ -251,7 +279,9 @@ function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
         // 储物设备与物品跟在房间后面恢复：撤销一次房间改动时，
         // 期间新增的柜子和物品不能因为 DELETE FROM rooms 的级联而消失。
         const insertStorage = db.prepare(
-            'INSERT INTO storage (id, room_id, name, kind, sort_order) VALUES (?, ?, ?, ?, ?)',
+            `INSERT INTO storage
+                 (id, room_id, name, kind, sort_order, preset, x, y, width, height, rotation)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         );
         const roomIds = new Set(ids);
         const storageIds = new Set();
@@ -268,6 +298,12 @@ function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
                 normalizeName(device.name, '储物设备名称'),
                 device.kind,
                 order,
+                optionalPreset(device.preset),
+                optionalNumber(device.x),
+                optionalNumber(device.y),
+                optionalNumber(device.width),
+                optionalNumber(device.height),
+                normalizeRotation(device.rotation),
             );
         });
 
@@ -439,13 +475,22 @@ function loadState(db) {
     }
 
     const storage = db
-        .prepare('SELECT id, room_id, name, kind FROM storage ORDER BY sort_order')
+        .prepare(
+            `SELECT id, room_id, name, kind, preset, x, y, width, height, rotation
+               FROM storage ORDER BY sort_order`,
+        )
         .all()
         .map((item) => ({
             id: item.id,
             roomId: item.room_id,
             name: item.name,
             kind: item.kind,
+            preset: item.preset ? item.preset : null,
+            x: item.x ?? null,
+            y: item.y ?? null,
+            width: item.width ?? null,
+            height: item.height ?? null,
+            rotation: normalizeRotation(item.rotation),
         }));
 
     const items = db
@@ -778,17 +823,103 @@ function removeOpening(db, rawId) {
  * @param {Record<string, unknown>} raw
  */
 function addStorage(db, raw) {
-    if (typeof raw !== 'object' || raw === null) fail('储物设备参数无效');
+    if (typeof raw !== 'object' || raw === null) fail('家具参数无效');
     const roomId = normalizeName(raw.roomId, '房间 id');
     if (!db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId)) fail('房间不存在');
-    if (!STORAGE_KINDS.has(raw.kind)) fail('储物设备类型无效');
+    if (!STORAGE_KINDS.has(raw.kind)) fail('家具类型无效');
 
-    const name = normalizeName(raw.name, '储物设备名称');
+    const name = normalizeName(raw.name, '家具名称');
     const order = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM storage').get();
     const id = makeId('storage');
+    // 位置是可选参数：从家具库"点一下加进来"时不带坐标，先按房间宽度自动排。
     db.prepare(
-        'INSERT INTO storage (id, room_id, name, kind, sort_order) VALUES (?, ?, ?, ?, ?)',
-    ).run(id, roomId, name, raw.kind, order.next);
+        `INSERT INTO storage
+             (id, room_id, name, kind, sort_order, preset, x, y, width, height, rotation)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+        id,
+        roomId,
+        name,
+        raw.kind,
+        order.next,
+        optionalPreset(raw.preset),
+        optionalNumber(raw.x),
+        optionalNumber(raw.y),
+        optionalNumber(raw.width),
+        optionalNumber(raw.height),
+        normalizeRotation(raw.rotation),
+    );
+    return loadState(db);
+}
+
+/**
+ * 把一件家具摆到房间里（拖放落点）。
+ *
+ * 这里只存数字与旋转，不管夹边界：房间尺寸随时会变，夹取放在渲染层
+ * （plan-storage 的 placedBox）做，房间一缩放家具就自动跟着收回来。
+ * 但明显写错的数据必须拦住 —— 非有限数、负尺寸、超出全局上限都直接失败。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {Record<string, unknown>} raw
+ */
+function placeStorage(db, raw) {
+    if (typeof raw !== 'object' || raw === null) fail('家具参数无效');
+    const id = normalizeName(raw.id, '家具 id');
+    if (!db.prepare('SELECT id FROM storage WHERE id = ?').get(id)) fail('家具不存在');
+
+    /** @param {unknown} value @param {string} label */
+    const side = (value, label) => {
+        if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${label}必须是数字`);
+        if (value < MIN_FURNITURE_SIZE || value > MAX_FURNITURE_SIDE) {
+            fail(`${label}必须在 ${MIN_FURNITURE_SIZE}–${MAX_FURNITURE_SIDE} 像素之间`);
+        }
+        return value;
+    };
+
+    const width = side(raw.width, '家具宽度');
+    const height = side(raw.height, '家具深度');
+    /** @param {unknown} value @param {string} label */
+    const coord = (value, label) => {
+        if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${label}必须是数字`);
+        if (Math.abs(value) > MAX_FURNITURE_SIDE * 20) fail(`${label}超出图纸范围`);
+        return value;
+    };
+
+    const rotation = raw.rotation === undefined || raw.rotation === null ? 0 : raw.rotation;
+    if (!FURNITURE_ROTATIONS.has(rotation)) fail('家具转角只能是 0 / 90 / 180 / 270 度');
+
+    /* 搬去另一个房间：家具的归属跟着坐标一起变，否则会出现「坐标落在次卧、
+       room_id 还写着主卧」这种两处矛盾的记录。 */
+    const roomId =
+        raw.roomId === undefined || raw.roomId === null
+            ? null
+            : normalizeName(raw.roomId, '房间 id');
+    if (roomId && !db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId)) {
+        fail('房间不存在');
+    }
+
+    if (roomId) {
+        db.prepare(
+            `UPDATE storage
+                SET room_id = ?, x = ?, y = ?, width = ?, height = ?, rotation = ?
+              WHERE id = ?`,
+        ).run(
+            roomId,
+            coord(raw.x, '家具横坐标'),
+            coord(raw.y, '家具纵坐标'),
+            width,
+            height,
+            rotation,
+            id,
+        );
+        /* 柜子里装着的东西跟着柜子一起搬房间。物品的 room_id 是必填的，
+           不同步就会出现「柜子在次卧、里面的东西还记在主卧」——
+           搜索定位会把人带到空房间。 */
+        db.prepare('UPDATE items SET room_id = ? WHERE storage_id = ?').run(roomId, id);
+    } else {
+        db.prepare(
+            'UPDATE storage SET x = ?, y = ?, width = ?, height = ?, rotation = ? WHERE id = ?',
+        ).run(coord(raw.x, '家具横坐标'), coord(raw.y, '家具纵坐标'), width, height, rotation, id);
+    }
     return loadState(db);
 }
 
@@ -945,6 +1076,8 @@ function dispatchCommand(db, command) {
             return setRoomOpenWalls(db, command.id, command.openWalls);
         case 'add-storage':
             return addStorage(db, /** @type {Record<string, unknown>} */ (command));
+        case 'place-storage':
+            return placeStorage(db, /** @type {Record<string, unknown>} */ (command));
         case 'rename-storage':
             return renameStorage(db, command.id, command.name);
         case 'remove-storage':

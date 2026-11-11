@@ -202,8 +202,28 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
         /*== 储物设备与物品 ==*/
         storage,
         items,
-        addStorage: (roomId: string, name: string, kind: StorageKind) =>
-            run({ type: 'add-storage', roomId, name, kind }),
+        addStorage: (
+            roomId: string,
+            name: string,
+            kind: StorageKind,
+            placement?: {
+                preset?: string;
+                x?: number;
+                y?: number;
+                width?: number;
+                height?: number;
+                rotation?: number;
+            },
+        ) => run({ type: 'add-storage', roomId, name, kind, ...placement }),
+        placeStorage: (
+            id: string,
+            x: number,
+            y: number,
+            width: number,
+            height: number,
+            rotation?: number,
+            roomId?: string,
+        ) => run({ type: 'place-storage', id, x, y, width, height, rotation, roomId }),
         renameStorage: (id: string, name: string) => run({ type: 'rename-storage', id, name }),
         removeStorage: (id: string) => run({ type: 'remove-storage', id }),
         addItem: (input: {

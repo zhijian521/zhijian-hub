@@ -148,9 +148,16 @@ describe('openDatabase', () => {
             DROP TABLE openings;
             ALTER TABLE openings_v5 RENAME TO openings;
         `);
-        // 造库用的是当前代码，rooms 已经带 open_walls 列；要真的回到版本 5 的形状得先摘掉它，
-        // 否则 v6 → v7 的 ALTER TABLE 会撞「duplicate column name」。
+        // 造库用的是当前代码，rooms 已经带 open_walls、storage 已经带家具列；要真的
+        // 回到版本 5 的形状得先摘掉它们，否则 v7 / v10 的 ALTER TABLE 会撞
+        // 「duplicate column name」。
         old.exec('ALTER TABLE rooms DROP COLUMN open_walls');
+        old.exec('ALTER TABLE storage DROP COLUMN preset');
+        old.exec('ALTER TABLE storage DROP COLUMN x');
+        old.exec('ALTER TABLE storage DROP COLUMN y');
+        old.exec('ALTER TABLE storage DROP COLUMN width');
+        old.exec('ALTER TABLE storage DROP COLUMN height');
+        old.exec('ALTER TABLE storage DROP COLUMN rotation');
         old.exec('PRAGMA foreign_keys = ON');
         old.exec('PRAGMA user_version = 5');
         old.close();
@@ -201,6 +208,39 @@ describe('openDatabase', () => {
 
         db.prepare('UPDATE openings SET depth = ? WHERE id = ?').run(40, 'b1');
         assert.equal(db.prepare('SELECT depth FROM openings WHERE id = ?').get('b1').depth, 40);
+        db.close();
+    });
+
+    it('版本 10 的家具能存原型与坐标，旧库升上来位置为空', () => {
+        const file = join(workdir, 'storage-v10.db');
+        const db = openDatabase(file);
+        db.prepare(
+            'INSERT INTO floor_plan (id, name, room_seq, created_at) VALUES (?, ?, ?, ?)',
+        ).run('singleton', '家', 1, '2026-01-01');
+        db.prepare(
+            'INSERT INTO rooms (id, name, x, y, width, height, sort_order, floor, outdoor, open_walls) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ).run('r1', '主卧', 0, 0, 300, 200, 0, 'wood', 0, '');
+
+        // 不写位置就落默认值：老库里的柜子升上来没有坐标，渲染层会走自动网格。
+        db.prepare(
+            'INSERT INTO storage (id, room_id, name, kind, sort_order) VALUES (?, ?, ?, ?, ?)',
+        ).run('s1', 'r1', '衣柜', 'cabinet', 0);
+        const row = db.prepare('SELECT preset, x, y, rotation FROM storage WHERE id = ?').get('s1');
+        assert.deepEqual(
+            { preset: row.preset, x: row.x, y: row.y, rotation: row.rotation },
+            { preset: '', x: null, y: null, rotation: 0 },
+            '没摆过的家具不能凭空多出坐标',
+        );
+
+        // 拖放之后坐标与原型都要能写进去。
+        db.prepare(
+            'UPDATE storage SET preset = ?, x = ?, y = ?, width = ?, height = ?, rotation = ? WHERE id = ?',
+        ).run('wardrobe', 30, 40, 108, 36, 90, 's1');
+        const placed = db.prepare('SELECT * FROM storage WHERE id = ?').get('s1');
+        assert.deepEqual(
+            { preset: placed.preset, x: placed.x, y: placed.y, rotation: placed.rotation },
+            { preset: 'wardrobe', x: 30, y: 40, rotation: 90 },
+        );
         db.close();
     });
 

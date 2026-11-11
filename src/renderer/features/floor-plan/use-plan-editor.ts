@@ -36,8 +36,11 @@ const OPENING_TOOLS: PlanTool[] = ['door', 'window', 'bay'];
  * 浏览模式是默认态：只能看和搜，拖动是平移，点一下只做选中。
  * 改户型（画房间、挪墙、放门窗、删房间）必须先显式进入编辑模式，
  * 这样"手滑拖了一下房间"就不会再发生。
+ *
+ * furniture 是第三态：摆家具时房间几何完全锁死 —— 没有缩放柄、拖着画布只是平移，
+ * 能拖动的只有家具。两件事分开，界面才不会互相打岔。
  */
-export type PlanMode = 'browse' | 'edit';
+export type PlanMode = 'browse' | 'edit' | 'furniture';
 
 type Drag =
     | {
@@ -177,7 +180,7 @@ export function usePlanEditor() {
         cancel();
         mode.value = value;
         message.value = '';
-        if (value === 'browse') {
+        if (value !== 'edit') {
             tool.value = 'select';
             selectedOpeningId.value = null;
         }
@@ -228,8 +231,8 @@ export function usePlanEditor() {
     function down(event: PointerEvent) {
         if (!store.hasPlan || (event.button !== 0 && event.button !== 1)) return;
         const p = local(event);
-        // 浏览模式：左键也只是平移（抬起时若没动过就当作一次点选）。
-        if (event.button === 1 || space.value || mode.value === 'browse' || tool.value === 'hand') {
+        // 浏览与摆家具两种非编辑态：左键也只是平移（浏览态抬起时若没动过就当作一次点选）。
+        if (event.button === 1 || space.value || mode.value !== 'edit' || tool.value === 'hand') {
             event.preventDefault();
             drag.value = {
                 kind: 'pan',
@@ -237,7 +240,8 @@ export function usePlanEditor() {
                 start: { x: event.clientX, y: event.clientY },
                 x: pan.value.x,
                 y: pan.value.y,
-                pick: mode.value === 'browse' && event.button === 0 && !space.value,
+                // 摆家具时点房间也要能选中（决定新家具放进哪一间），所以两档都 pick。
+                pick: mode.value !== 'edit' && event.button === 0 && !space.value,
                 moved: false,
             };
             capture(event);
@@ -493,7 +497,10 @@ export function usePlanEditor() {
             space.value = true;
         }
         if (key === '0') fit();
+        // E 只在「浏览 / 修改」之间来回；摆家具是另一档，别让一个按键把
+        // 房间几何的工具有重新放出来。
         if (key === 'e' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            if (mode.value === 'furniture') return;
             setMode(mode.value === 'edit' ? 'browse' : 'edit');
             return;
         }

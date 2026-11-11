@@ -4,8 +4,8 @@
 
   布局原则：界面里没有一条常驻的 header / footer / 侧边栏，画布铺满整个窗口。
   所有控件都是浮在画布上的「悬浮件」：
-    · 顶部居中 —— 快捷搜索（物品 / 储物设备 / 房间）
-    · 左上角   —— 菜单（首页 / 房间 / 家具 / 储物 / 导出）
+    · 顶部居中 —— 快捷搜索（物品 / 家具 / 房间）
+    · 左上角   —— 菜单（首页 / 房间 / 家具 / 导出）
     · 底部居中 —— 绘图工具、撤销重做与「完成」（仅修改模式，浮在底栏之上）
     · 底部整条 —— 一条底栏：图纸角标（也是图纸概览入口）· 图层开关 · 比例尺 · 缩放
 
@@ -13,14 +13,22 @@
   以及房间内容卡底部的「修改这个房间」；唯一的出口是工具条最右边的「完成」。
 
   右侧是唯一的详情区，三种内容互斥：
-    · 看内容 —— 点房间或柜子，列出里面存着的东西（浏览模式的主视角）
-    · 清单   —— 点左侧「房间 / 家具 / 储物」，列整体清单
+    · 看内容 —— 点房间或家具，列出里面存着的东西（浏览模式的主视角）
+    · 清单   —— 点左侧「房间 / 家具」，列整体清单
     · 属性   —— 修改模式下改一个房间 / 门窗
   首页选中时右侧什么都不弹：只剩画布、搜索和左侧菜单。
 ============================================================================*/
 
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import type { FloorMaterial, Opening, Room, StorageKind, StoredItem, WallSide } from '@/app/types';
+import type {
+    FloorMaterial,
+    Opening,
+    Room,
+    StorageDevice,
+    StorageKind,
+    StoredItem,
+    WallSide,
+} from '@/app/types';
 import FloatCard from '@/components/float-card.vue';
 import {
     BAY_DEPTH_MAX,
@@ -47,7 +55,25 @@ import {
     wallOpenings,
 } from '@/lib/plan-scene';
 import { searchPlan, type SearchHit } from '@/lib/plan-search';
-import { layoutStorage } from '@/lib/plan-storage';
+import {
+    boxInsideRoom,
+    furnitureSize,
+    layoutStorage,
+    MAX_FURNITURE_SIDE,
+    MIN_FURNITURE_SIZE,
+    roomAtPoint,
+    type StorageBox,
+} from '@/lib/plan-storage';
+import {
+    FURNITURE_PRESETS,
+    furnitureDrawing,
+    isSideways,
+    normalizeRotation,
+    presetOf,
+    type FurnitureDrawing,
+    type FurniturePreset,
+    type FurnitureRotation,
+} from '@/lib/furniture-catalog';
 import { roomArea } from '@/stores/floor-plan';
 import PlanDrawing from './plan-drawing.vue';
 import PlanIcon from './plan-icon.vue';
@@ -90,18 +116,19 @@ const {
 
 /*== 左侧菜单 ==============================================================
   首页是默认项：它不打开任何卡片，界面就只剩画布、搜索和菜单。
-  房间 / 家具 / 储物 三项在右侧列出清单，点清单条目看里面存了什么。    */
-type MenuId = 'home' | 'rooms' | 'furniture' | 'storage';
+  房间 / 家具 两项在右侧列出清单，点清单条目看里面存了什么。    */
+type MenuId = 'home' | 'rooms' | 'furniture';
 const menu = ref<MenuId>('home');
 const menus: { id: MenuId; label: string; icon: string }[] = [
     { id: 'home', label: '首页', icon: 'home' },
     { id: 'rooms', label: '房间', icon: 'room' },
+    // 家具与储物是同一件事：衣柜、书柜、冰箱都是"能放东西的家具"，
+    // 所以只有一张表、一个菜单项，下面按原型区分。
     { id: 'furniture', label: '家具', icon: 'sofa' },
-    { id: 'storage', label: '储物', icon: 'cabinet' },
 ];
 
 /*== 右侧详情的三种内容 ====================================================
-  browse  —— 正在看哪个房间 / 柜子的内容
+  browse  —— 正在看哪个房间 / 家具的内容
   detail  —— 修改模式下的属性编辑
   menu    —— 左侧三个清单项，没点具体对象时列整体清单                     */
 const browse = ref<{ kind: 'room' | 'storage'; id: string } | null>(null);
@@ -109,6 +136,9 @@ const detail = ref(false);
 /** 刚定位到的物品：让它闪一下，眼睛才跟得上。 */
 const locatedItemId = ref<string | null>(null);
 const hoverStorageId = ref<string | null>(null);
+/** 摆家具那一档里选中的家具：只在这档有意义，房间属性卡不再管家具。 */
+const furnitureSelection = ref<string | null>(null);
+const furnitureName = ref('');
 
 const materials: { id: FloorMaterial; label: string }[] = [
     { id: 'wood', label: '橡木地板' },
@@ -122,12 +152,13 @@ const materials: { id: FloorMaterial; label: string }[] = [
     { id: 'microcement', label: '微水泥' },
     { id: 'carpet', label: '地毯' },
 ];
-const storageKinds: { id: StorageKind; label: string; icon: string }[] = [
-    { id: 'cabinet', label: '柜子', icon: 'cabinet' },
-    { id: 'shelf', label: '架子', icon: 'box' },
-    { id: 'box', label: '收纳箱', icon: 'box' },
-    { id: 'furniture', label: '家具', icon: 'sofa' },
-];
+/** 形态只决定清单里用什么图标；具体是什么家具由原型（preset）决定。 */
+const kindIcons: Record<StorageKind, string> = {
+    cabinet: 'cabinet',
+    shelf: 'box',
+    box: 'box',
+    furniture: 'sofa',
+};
 const itemCategories = ['衣物', '书籍', '工具', '电子', '户外', '食品', '证件', '纪念', '其他'];
 
 const searchQuery = ref('');
@@ -148,7 +179,7 @@ const showMaterials = ref(false);
 const showGrid = ref(true);
 /* 房间名、面积、侧边尺寸链只在**修改模式**里画。
    浏览态一律是干净底图 —— 首页、三个清单页、以及在房间菜单里选中某一间看内容，
-   都算浏览态：这些时候要回答的是「东西在哪」，文字会压在柜子方块上，
+   都算浏览态：这些时候要回答的是「东西在哪」，文字会压在家具上，
    尺寸链还会围着墙绕一圈。需要知道「这是哪一间、多大」的只有改图的时候。 */
 const showRoomLabels = computed(() => mode.value === 'edit');
 const newPlanName = ref('我的家');
@@ -180,18 +211,57 @@ const openingCount = computed(() => rooms.value.reduce((sum, r) => sum + r.openi
 /* 保存状态原本挂在左侧卡片标题上；卡片改成右侧互斥展示后没有落点了，
    状态本身仍由 store.status 驱动，这里不再单独算一份字符串。 */
 
-/*== 储物设备与物品 ========================================================*/
+/*== 家具与物品 ============================================================*/
 const storageBoxes = computed(() => layoutStorage(rooms.value, store.storage));
+/** 每件家具的平面画法：原型决定床有枕头、沙发有扶手、冰箱有门缝。 */
+/** 家具在画布上怎么落位。
+ *
+ * 转角 90 度时 furnitureDrawing 会把宽深换过来画（局部坐标系仍是「长边朝右」），
+ * 所以这里必须真的绕家具中心转 90 度，否则 120×90 的床会按 90×120 画，
+ * 直接压出房间边界。 */
+function furnitureTransform(box: StorageBox, drawing: FurnitureDrawing): string {
+    if (drawing.rotation === 0) return `translate(${box.x} ${box.y})`;
+    // 90 / 180 / 270 都绕家具中心转：局部坐标系的画法不变，占地仍是同一个外接矩形。
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    return `translate(${cx} ${cy}) rotate(${drawing.rotation}) translate(${-drawing.localWidth / 2} ${-drawing.localHeight / 2})`;
+}
+
+const storageViews = computed(() =>
+    storageBoxes.value.map((box) => {
+        const drawing = furnitureDrawing(box);
+        return {
+            box,
+            drawing,
+            transform: furnitureTransform(box, drawing),
+            preset: presetOf(box.preset),
+        };
+    }),
+);
 const roomNames = computed(() => new Map(rooms.value.map((room) => [room.id, room.name])));
 
 const itemsOfRoom = (roomId: string) => store.items.filter((item) => item.roomId === roomId);
 const itemsOfStorage = (storageId: string) =>
     store.items.filter((item) => item.storageId === storageId);
 const deviceOf = (id: string) => store.storage.find((device) => device.id === id) ?? null;
-const iconOfKind = (kind: StorageKind) =>
-    storageKinds.find((entry) => entry.id === kind)?.icon ?? 'cabinet';
+const iconOfKind = (kind: StorageKind) => kindIcons[kind] ?? 'cabinet';
 
-/** 右侧「物品内容」卡片的数据：房间或柜子，二选一。 */
+/** 属性清单里的一行小字：原型 + 实际尺寸 + 存了几件东西。 */
+function deviceDetail(device: StorageDevice): string {
+    const box = storageBoxes.value.find((entry) => entry.id === device.id);
+    const own = box ? furnitureSize(box) : null;
+    const size = own ? mm(own.width) + '×' + mm(own.height) : presetOf(device.preset)?.hint;
+    const preset = presetOf(device.preset)?.name;
+    return [
+        preset === device.name ? '' : preset,
+        size,
+        itemsOfStorage(device.id).length + ' 件物品',
+    ]
+        .filter(Boolean)
+        .join(' · ');
+}
+
+/** 右侧「物品内容」卡片的数据：房间或家具，二选一。 */
 const browseRoom = computed<Room | null>(() => {
     const target = browse.value;
     if (!target) return null;
@@ -237,16 +307,21 @@ const browseItemRows = computed(() =>
     })),
 );
 
-/** 画布上的「选中」样式：只有真的选中了房间 / 柜子才点亮，悬停是另一套浅一档的提示。 */
+/** 画布上的「选中」样式：只有真的选中了房间 / 家具才点亮，悬停是另一套浅一档的提示。 */
 const activeRoomId = computed(() => {
     const target = browse.value;
     if (target?.kind === 'room') return target.id;
-    if (mode.value === 'edit') return store.selectedId;
+    // 修改与摆家具两档都靠 store.selectedId 指认房间：前者是"要改这一间"，
+    // 后者是"新家具会落进这一间"。
+    if (mode.value !== 'browse') return store.selectedId;
     return null;
 });
-const activeStorageId = computed(() => (browse.value?.kind === 'storage' ? browse.value.id : null));
+const activeStorageId = computed(() => {
+    if (mode.value === 'furniture') return furnitureSelection.value;
+    return browse.value?.kind === 'storage' ? browse.value.id : null;
+});
 
-/** 属性卡片里要用的两份列表：选中房间的柜子、选中房间的物品。
+/** 属性卡片里要用的两份列表：选中房间的家具、选中房间的物品。
     模板箭头函数里 selectedRoom 的类型收窄会丢，一律在脚本层算好。 */
 const roomStorage = computed(() =>
     selectedRoom.value
@@ -282,7 +357,7 @@ function toggleOpenWall(side: WallSide) {
     void store.setRoomOpenWalls(room.id, next);
 }
 
-/*== 左侧清单：点「房间 / 家具 / 储物」时右侧列什么 ========================*/
+/*== 左侧清单：点「房间 / 家具」时右侧列什么 ==============================*/
 interface PlaceEntry {
     kind: 'room' | 'storage';
     id: string;
@@ -308,50 +383,58 @@ const listEntries = computed<PlaceEntry[]>(() => {
             count: itemsOfRoom(room.id).length,
         }));
     }
-    if (menu.value === 'furniture' || menu.value === 'storage') {
-        return store.storage
-            .filter((device) => menu.value === 'storage' || device.kind === 'furniture')
-            .map((device) => ({
+    if (menu.value === 'furniture') {
+        return store.storage.map((device) => {
+            const preset = presetOf(device.preset)?.name;
+            return {
                 kind: 'storage' as const,
                 id: device.id,
                 title: device.name,
-                detail: roomNames.value.get(device.roomId) ?? '未归位',
+                // 用户没改名时 title 就等于原型名，别写成「衣柜 · 衣柜」。
+                detail: [
+                    roomNames.value.get(device.roomId) ?? '未归位',
+                    preset === device.name ? '' : preset,
+                ]
+                    .filter(Boolean)
+                    .join(' · '),
                 icon: iconOfKind(device.kind),
                 count: itemsOfStorage(device.id).length,
-            }));
+            };
+        });
     }
     return [];
 });
-const listEyebrow = computed(() =>
-    menu.value === 'rooms' ? 'ROOMS' : menu.value === 'furniture' ? 'FURNITURE' : 'STORAGE',
-);
-const listTitle = computed(() =>
-    menu.value === 'rooms' ? '房间' : menu.value === 'furniture' ? '家具' : '储物设备',
-);
+const listEyebrow = computed(() => (menu.value === 'rooms' ? 'ROOMS' : 'FURNITURE'));
+const listTitle = computed(() => (menu.value === 'rooms' ? '房间' : '家具'));
 const listSubtitle = computed(() =>
     menu.value === 'rooms'
         ? `${rooms.value.length} 个空间 · ${totalArea.value} m² · ${openingCount.value} 处门窗`
-        : `${listEntries.value.length} 件 · 点进去看里面存了什么`,
+        : `${listEntries.value.length} 件家具 · 点进去看里面存了什么`,
 );
 const listEmpty = computed(() =>
     menu.value === 'rooms'
         ? '还没有房间。开修改模式在画布上拖出第一个空间。'
-        : menu.value === 'furniture'
-          ? '还没有登记家具。开修改模式在房间里添加。'
-          : '还没有储物设备。开修改模式在房间里添加柜子。',
+        : '还没有家具。开修改模式把家具拖进房间。',
 );
 
-/** 右侧只有一张卡片，内容优先级：看内容 > 属性 > 清单。 */
-const rightCard = computed<'browse' | 'property' | 'list' | null>(() => {
+/** 右侧只有一张卡片，内容优先级：摆家具 > 看内容 > 属性 > 清单。 */
+const rightCard = computed<'furniture' | 'browse' | 'property' | 'list' | null>(() => {
+    // 家具是独立一档：这一档里右侧固定是家具面板，不会被"点了个房间"顶掉。
+    if (mode.value === 'furniture') return 'furniture';
     if (browse.value) return 'browse';
     if (detail.value) return 'property';
     if (menu.value !== 'home') return 'list';
     return null;
 });
 
-/*== 编辑模式下的两个小表单：加柜子、放东西 ================================*/
-const newStorageName = ref('');
-const newStorageKind = ref<StorageKind>('cabinet');
+/*== 编辑模式下的两个小表单：家具库、放东西 ================================*/
+/* 家具库：原型是"点一下 / 拖一下"的唯一入口。
+   点「加一件」按房间宽度自动排；从库里拖到画布上，就落在手指松开的地方。 */
+const newFurniturePreset = ref<string>('wardrobe');
+const chosenPreset = computed<FurniturePreset>(
+    () => presetOf(newFurniturePreset.value) ?? (FURNITURE_PRESETS[0] as FurniturePreset),
+);
+const furnitureNotice = ref('');
 const itemName = ref('');
 const itemCategory = ref('衣物');
 const itemQuantity = ref(1);
@@ -366,17 +449,455 @@ function resetItemForm() {
     itemFormError.value = '';
 }
 
-async function submitStorage() {
-    const room = browseRoom.value;
-    if (!room) return;
-    const label =
-        newStorageName.value.trim() ||
-        (storageKinds.find((kind) => kind.id === newStorageKind.value)?.label ?? '柜子');
-    if (await store.addStorage(room.id, label, newStorageKind.value)) {
-        newStorageName.value = '';
+/** 点「放一件」：不动坐标，交给自动网格排在房间左上角那一片。 */
+async function submitFurniture() {
+    const roomId = furnitureRoomId.value;
+    if (!roomId) {
+        furnitureNotice.value = '先选一个房间，家具才有地方放。';
+        return;
+    }
+    const preset = chosenPreset.value;
+    furnitureNotice.value = '';
+    if (await store.addStorage(roomId, preset.name, preset.kind, { preset: preset.id })) {
         message.value = '';
     }
 }
+
+/*== 从家具库拖到画布 ======================================================
+  指针事件挂在 window 上：一旦起拖，鼠标跑到画布外也不会丢失这次拖拽。
+  落点用 stage 的矩形 + pan / zoom 反向换算成画板坐标，和 usePlanEditor 里
+  的 local() 是同一套换算，所以"拖到哪里就落在哪里"跟画布上看到的一致。 */
+interface FurnitureDrop {
+    room: Room | null;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    legal: boolean;
+}
+const furnitureDrag = ref<{ preset: FurniturePreset; drop: FurnitureDrop | null } | null>(null);
+
+function boardPoint(event: PointerEvent) {
+    const rect = stage.value?.getBoundingClientRect();
+    if (!rect) return null;
+    return {
+        x: (event.clientX - rect.left - pan.value.x) / zoom.value,
+        y: (event.clientY - rect.top - pan.value.y) / zoom.value,
+    };
+}
+
+/** 算出这件家具如果现在松手会落在哪：以指针为中心，尺寸取原型的真实尺寸。 */
+function dropAt(preset: FurniturePreset, event: PointerEvent): FurnitureDrop | null {
+    const point = boardPoint(event);
+    if (!point) return null;
+    const box = {
+        x: point.x - preset.width / 2,
+        y: point.y - preset.height / 2,
+        width: preset.width,
+        height: preset.height,
+    };
+    const room = roomAtPoint(rooms.value, point.x, point.y);
+    return { room, ...box, legal: room ? boxInsideRoom(room, box) : false };
+}
+
+function moveFurnitureDrag(event: PointerEvent) {
+    const current = furnitureDrag.value;
+    if (!current) return;
+    furnitureDrag.value = { preset: current.preset, drop: dropAt(current.preset, event) };
+}
+
+function stopFurnitureDrag() {
+    window.removeEventListener('pointermove', moveFurnitureDrag);
+    window.removeEventListener('pointerup', endFurnitureDrag);
+    window.removeEventListener('pointercancel', cancelFurnitureDrag);
+    furnitureDrag.value = null;
+}
+
+function cancelFurnitureDrag() {
+    stopFurnitureDrag();
+    furnitureNotice.value = '';
+}
+
+function startFurnitureDrag(preset: FurniturePreset, event: PointerEvent) {
+    if (mode.value !== 'furniture' || store.busy) return;
+    event.preventDefault();
+    furnitureNotice.value = '';
+    furnitureDrag.value = { preset, drop: dropAt(preset, event) };
+    window.addEventListener('pointermove', moveFurnitureDrag);
+    window.addEventListener('pointerup', endFurnitureDrag);
+    window.addEventListener('pointercancel', cancelFurnitureDrag);
+}
+
+async function endFurnitureDrag(event: PointerEvent) {
+    const current = furnitureDrag.value;
+    if (!current) return;
+    const drop = dropAt(current.preset, event);
+    stopFurnitureDrag();
+    if (!drop || !drop.room) {
+        furnitureNotice.value = '拖到房间里松手，家具才有归属。';
+        return;
+    }
+    if (!drop.legal) {
+        furnitureNotice.value = '这里放不下：家具会压到墙上，换个位置再松手。';
+        return;
+    }
+    const ok = await store.addStorage(drop.room.id, current.preset.name, current.preset.kind, {
+        preset: current.preset.id,
+        x: drop.x,
+        y: drop.y,
+        width: drop.width,
+        height: drop.height,
+        rotation: 0,
+    });
+    if (ok) {
+        furnitureNotice.value = '';
+        furnitureRoomId.value = drop.room.id;
+    }
+}
+
+/** 拖拽中的跟手预览：位置合法用品牌色，压到墙上用警示色。 */
+const furnitureGhost = computed(() => {
+    const current = furnitureDrag.value;
+    // 从右侧家具库起拖时指针还在卡片上，没有房间可归属；预览照样要跟着走，
+    // 否则用户会以为"按下去没反应"。
+    if (!current?.drop) return null;
+    const drop = current.drop;
+    return {
+        x: drop.x,
+        y: drop.y,
+        width: drop.width,
+        height: drop.height,
+        drawing: furnitureDrawing({
+            preset: current.preset.id,
+            width: drop.width,
+            height: drop.height,
+        }),
+        ink: drop.legal ? 'var(--brand)' : 'var(--danger)',
+        wash: drop.legal ? 'var(--brand-soft)' : 'var(--danger-soft)',
+    };
+});
+
+/*== 家具的尺寸、位置与朝向 ================================================
+  三样东西都只改这一件家具，不碰房间几何：家具档的房间是锁死的。
+  单位一律 mm（与房间属性卡一致），存回库里仍是画板像素。
+
+  一个约定：界面上填的「宽度 / 进深」是**家具本体**的尺寸，不是占地外接框。
+  侧过来摆（90 / 270）时两者是对调的，所以读写都要经过 furnitureSize / isSideways。 */
+
+/** 家具尺寸的下限 / 上限，换算成毫米，和主进程那一套界限一一对应。 */
+const FURNITURE_MIN_MM = Math.round(MIN_FURNITURE_SIZE * MILLIMETERS_PER_PIXEL);
+const FURNITURE_MAX_MM = Math.round(MAX_FURNITURE_SIDE * MILLIMETERS_PER_PIXEL);
+
+/** 选中家具当前的方框（含自动网格算出来的那一份），尺寸/位置输入都照它回填。 */
+const furnitureBox = computed<StorageBox | null>(
+    () => storageBoxes.value.find((box) => box.id === furnitureSelection.value) ?? null,
+);
+/** 当前朝向：0 / 90 / 180 / 270，脏数据按 0 处理。 */
+const furnitureRotation = computed<FurnitureRotation>(() =>
+    normalizeRotation(furnitureBox.value?.rotation),
+);
+/** 四档朝向的中文说法：0 度是原型本身的方向，顺时针一圈回来。 */
+const ROTATION_LABELS: { value: FurnitureRotation; label: string }[] = [
+    { value: 0, label: '0°' },
+    { value: 90, label: '90°' },
+    { value: 180, label: '180°' },
+    { value: 270, label: '270°' },
+];
+const furnitureWidth = ref(0);
+const furnitureHeight = ref(0);
+const furnitureLeft = ref(0);
+const furnitureTop = ref(0);
+const furnitureFormError = ref('');
+
+/** 把当前家具的真实尺寸与位置回填到输入框（每次改完都重新对齐，不靠乐观值）。 */
+function syncFurnitureForm() {
+    const box = furnitureBox.value;
+    const room = box ? rooms.value.find((entry) => entry.id === box.roomId) : null;
+    if (!box || !room) {
+        furnitureWidth.value = 0;
+        furnitureHeight.value = 0;
+        furnitureLeft.value = 0;
+        furnitureTop.value = 0;
+        return;
+    }
+    const size = furnitureSize(box);
+    furnitureWidth.value = mm(size.width);
+    furnitureHeight.value = mm(size.height);
+    // 位置按「离房间左上角多远」显示：绝对坐标是画板内部的事，用户想的是距墙多少。
+    furnitureLeft.value = mm(box.x - room.x);
+    furnitureTop.value = mm(box.y - room.y);
+}
+
+/** 改尺寸或改位置：统一走 place-storage，最后把方框夹回房间里。 */
+async function applyFurniture(field: 'size' | 'position') {
+    const box = furnitureBox.value;
+    const room = box ? rooms.value.find((entry) => entry.id === box.roomId) : null;
+    if (!box || !room || store.busy) return;
+    furnitureFormError.value = '';
+    const toPx = (value: number) => value / MILLIMETERS_PER_PIXEL;
+
+    let { width, height } = box;
+    let x = box.x;
+    let y = box.y;
+
+    if (field === 'size') {
+        const wanted = Number(furnitureWidth.value);
+        const deep = Number(furnitureHeight.value);
+        if (!Number.isFinite(wanted) || !Number.isFinite(deep) || wanted <= 0 || deep <= 0) {
+            furnitureFormError.value = '宽度和进深都要填正数。';
+            syncFurnitureForm();
+            return;
+        }
+        const wPx = toPx(wanted);
+        const hPx = toPx(deep);
+        if (Math.min(wPx, hPx) < MIN_FURNITURE_SIZE || Math.max(wPx, hPx) > MAX_FURNITURE_SIDE) {
+            furnitureFormError.value = `家具尺寸要在 ${FURNITURE_MIN_MM}–${FURNITURE_MAX_MM} mm 之间。`;
+            syncFurnitureForm();
+            return;
+        }
+        // 侧着摆时占地宽深与本体宽深对调，别把 1.2 m 的床改成 1.2 m 宽 2 m 深。
+        if (isSideways(box.rotation)) {
+            width = hPx;
+            height = wPx;
+        } else {
+            width = wPx;
+            height = hPx;
+        }
+    } else {
+        const left = Number(furnitureLeft.value);
+        const top = Number(furnitureTop.value);
+        if (!Number.isFinite(left) || !Number.isFinite(top) || left < 0 || top < 0) {
+            furnitureFormError.value = '距墙的距离不能是负数。';
+            syncFurnitureForm();
+            return;
+        }
+        x = room.x + toPx(left);
+        y = room.y + toPx(top);
+    }
+
+    if (width > room.width || height > room.height) {
+        furnitureFormError.value = '这个尺寸塞不进这间房，先把家具改小或换个房间。';
+        syncFurnitureForm();
+        return;
+    }
+    // 一律先夹进墙内：宁可位置被拉回来，也不要留半截家具插在墙里。
+    x = Math.min(Math.max(x, room.x), room.x + room.width - width);
+    y = Math.min(Math.max(y, room.y), room.y + room.height - height);
+
+    await store.placeStorage(
+        box.id,
+        Math.round(x * 100) / 100,
+        Math.round(y * 100) / 100,
+        Math.round(width * 100) / 100,
+        Math.round(height * 100) / 100,
+        box.rotation,
+        room.id,
+    );
+    syncFurnitureForm();
+}
+
+/** 换成某一档朝向：90 / 270 与 0 / 180 之间切换时，占地宽深对调，中心点保持不动。 */
+async function applyFurnitureRotation(next: FurnitureRotation) {
+    const box = furnitureBox.value;
+    const room = box ? rooms.value.find((entry) => entry.id === box.roomId) : null;
+    if (!box || !room || store.busy) return;
+    furnitureFormError.value = '';
+    if (normalizeRotation(box.rotation) === next) return;
+
+    let { width, height } = box;
+    if (isSideways(box.rotation) !== isSideways(next)) {
+        width = box.height;
+        height = box.width;
+    }
+    if (width > room.width || height > room.height) {
+        furnitureFormError.value = '这间房放不下转过来的家具，先换个位置或改小一点。';
+        return;
+    }
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    const x = Math.min(Math.max(centerX - width / 2, room.x), room.x + room.width - width);
+    const y = Math.min(Math.max(centerY - height / 2, room.y), room.y + room.height - height);
+    await store.placeStorage(box.id, x, y, width, height, next, room.id);
+    syncFurnitureForm();
+}
+
+/** 清单行尾那个按钮：按 0 → 90 → 180 → 270 循环，一下一下点比开面板快。 */
+async function rotateDevice(device: StorageDevice) {
+    const box = storageBoxes.value.find((entry) => entry.id === device.id);
+    if (!box || store.busy) return;
+    const next = ((normalizeRotation(box.rotation) + 90) % 360) as FurnitureRotation;
+    furnitureSelection.value = device.id;
+    await applyFurnitureRotation(next);
+}
+
+/*== 摆家具：独立一档，只动家具，不动墙 ===================================*/
+
+/** 选中的家具（只在这一档有意义）：右侧面板与画布描边都看它。 */
+const furnitureDevice = computed(
+    () => store.storage.find((device) => device.id === furnitureSelection.value) ?? null,
+);
+/** 新家具默认落进哪个房间：跟着左栏选中的房间走，可以手动改。 */
+const furnitureRoomId = ref<string | null>(null);
+/** 家具面板里列谁：只列「放进」那一栏选中的房间，一屏看得到头。 */
+const furnitureRoomStorage = computed(() =>
+    furnitureRoomId.value
+        ? store.storage.filter((device) => device.roomId === furnitureRoomId.value)
+        : [],
+);
+
+function enterFurniture() {
+    if (!store.hasPlan) return;
+    if (mode.value !== 'furniture') setMode('furniture');
+    menu.value = 'furniture';
+    browse.value = null;
+    detail.value = false;
+    if (!furnitureRoomId.value || !store.rooms.some((r) => r.id === furnitureRoomId.value)) {
+        furnitureRoomId.value = store.selectedId ?? store.rooms[0]?.id ?? null;
+    }
+    if (furnitureSelection.value && !furnitureDevice.value) furnitureSelection.value = null;
+}
+
+/** 退出摆家具：回到纯浏览，右侧卡片一起收掉。 */
+function exitFurniture() {
+    furnitureSelection.value = null;
+    cancelFurnitureMove();
+    cancelFurnitureDrag();
+    setMode('browse');
+    goMenu('home');
+}
+
+function selectFurniture(id: string) {
+    const device = deviceOf(id);
+    if (!device) return;
+    furnitureSelection.value = id;
+    furnitureName.value = device.name;
+    // 选中一件家具就把视线挪到它所在的房间，免得选了却看不见。
+    selectRoom(device.roomId);
+}
+
+async function renameFurniture() {
+    const device = furnitureDevice.value;
+    if (!device || store.busy) return;
+    const label = furnitureName.value.trim();
+    if (!label) {
+        furnitureName.value = device.name;
+        return;
+    }
+    if (label !== device.name) await store.renameStorage(device.id, label);
+}
+
+async function removeFurniture(device: StorageDevice) {
+    if (store.busy) return;
+    if (furnitureSelection.value === device.id) furnitureSelection.value = null;
+    await store.removeStorage(device.id);
+}
+
+/* 拖动已有家具：按住家具拖到新位置（可以跨房间）。
+   与「从库里拖一件新的」共用同一套落点判定，只是落定后发 place-storage。 */
+interface FurnitureMove {
+    id: string;
+    pointer: number;
+    /** 指针到家具左上角的偏移，保证拖动时家具不会跳到指针正下方。 */
+    dx: number;
+    dy: number;
+    width: number;
+    height: number;
+    rotation: number;
+    drop: FurnitureDrop | null;
+}
+const furnitureMove = ref<FurnitureMove | null>(null);
+
+function moveDropAt(current: FurnitureMove, event: PointerEvent): FurnitureDrop | null {
+    const point = boardPoint(event);
+    if (!point) return null;
+    const box = {
+        x: point.x + current.dx,
+        y: point.y + current.dy,
+        width: current.width,
+        height: current.height,
+    };
+    // 用家具中心找房间：跨界拖动时最直观 —— 一半压过墙就换隔壁那间。
+    const room = roomAtPoint(rooms.value, box.x + box.width / 2, box.y + box.height / 2);
+    return { room, ...box, legal: room ? boxInsideRoom(room, box) : false };
+}
+
+function onMoveMove(event: PointerEvent) {
+    const current = furnitureMove.value;
+    if (!current || current.pointer !== event.pointerId) return;
+    furnitureMove.value = { ...current, drop: moveDropAt(current, event) };
+}
+
+function stopFurnitureMove() {
+    window.removeEventListener('pointermove', onMoveMove);
+    window.removeEventListener('pointerup', endFurnitureMove);
+    window.removeEventListener('pointercancel', cancelFurnitureMove);
+}
+
+function cancelFurnitureMove() {
+    stopFurnitureMove();
+    furnitureMove.value = null;
+}
+
+async function endFurnitureMove(event: PointerEvent) {
+    const current = furnitureMove.value;
+    if (!current) return;
+    const drop = moveDropAt(current, event);
+    stopFurnitureMove();
+    furnitureMove.value = null;
+    if (!drop || !drop.room) {
+        furnitureNotice.value = '松手的地方没有房间，家具会留在原处。';
+        return;
+    }
+    if (!drop.legal) {
+        furnitureNotice.value = '这里放不下：家具会压到墙上，换个位置再松手。';
+        return;
+    }
+    furnitureNotice.value = '';
+    furnitureRoomId.value = drop.room.id;
+    await store.placeStorage(
+        current.id,
+        Math.round(drop.x),
+        Math.round(drop.y),
+        current.width,
+        current.height,
+        current.rotation,
+        drop.room.id,
+    );
+}
+
+function startFurnitureMove(device: StorageDevice, event: PointerEvent) {
+    if (mode.value !== 'furniture' || store.busy) return;
+    const box = storageBoxes.value.find((entry) => entry.id === device.id);
+    const point = boardPoint(event);
+    if (!box || !point) return;
+    event.preventDefault();
+    selectFurniture(device.id);
+    furnitureNotice.value = '';
+    furnitureMove.value = {
+        id: device.id,
+        pointer: event.pointerId,
+        dx: box.x - point.x,
+        dy: box.y - point.y,
+        width: box.width,
+        height: box.height,
+        rotation: box.rotation,
+        drop: null,
+    };
+    window.addEventListener('pointermove', onMoveMove);
+    window.addEventListener('pointerup', endFurnitureMove);
+    window.addEventListener('pointercancel', cancelFurnitureMove);
+}
+
+/** 拖动中的家具：原位置留一个虚框，跟手的位置用品牌色/警示色标出。 */
+const furnitureMoveGhost = computed(() => {
+    const current = furnitureMove.value;
+    const box = current ? storageBoxes.value.find((entry) => entry.id === current.id) : null;
+    if (!current?.drop || !box) return null;
+    return {
+        from: { x: box.x, y: box.y, width: box.width, height: box.height },
+        drop: current.drop,
+    };
+});
 
 async function submitItem() {
     const room = browseRoom.value;
@@ -412,11 +933,17 @@ const selectedFloorLabel = computed(() => {
 const cursor = computed(() =>
     drag.value?.kind === 'pan'
         ? 'grabbing'
-        : mode.value === 'browse' || space.value || tool.value === 'hand'
-          ? 'grab'
-          : tool.value === 'select'
-            ? 'default'
-            : 'crosshair',
+        : mode.value === 'furniture'
+          ? furnitureMove.value
+              ? 'grabbing'
+              : hoverStorageId.value
+                ? 'move'
+                : 'grab'
+          : mode.value === 'browse' || space.value || tool.value === 'hand'
+            ? 'grab'
+            : tool.value === 'select'
+              ? 'default'
+              : 'crosshair',
 );
 const handles = computed(() => {
     const room = selectedRoom.value;
@@ -488,6 +1015,13 @@ function goMenu(id: MenuId) {
     menu.value = id;
     browse.value = null;
     detail.value = false;
+    // 离开「家具」这一档就退回浏览态：那一档里房间几何是锁死的，
+    // 关掉它之后不该还留着半锁的界面。
+    if (mode.value === 'furniture' && id !== 'furniture') {
+        furnitureSelection.value = null;
+        furnitureMove.value = null;
+        setMode('browse');
+    }
     if (id === 'home') {
         selectRoom(null);
         if (mode.value === 'edit') setMode('browse');
@@ -505,26 +1039,40 @@ function openRoom(id: string) {
     browse.value = { kind: 'room', id };
 }
 
-/** 画布上点柜子（pointerdown.stop 到这里，避免顺带平移画布）。
-    浏览模式看里面存了什么；修改模式只是把房间属性调出来，不改柜子本身。 */
+/** 画布上点家具（pointerdown.stop 到这里，避免顺带平移画布）。
+    三个模式三种下场：摆家具时它是一段拖动，浏览时打开"里面有什么"，
+    修改房间几何时只把房间选上 —— 家具本身不归那一档管。 */
+function onStoragePointerDown(id: string, event: PointerEvent) {
+    if (mode.value === 'furniture') {
+        const device = deviceOf(id);
+        if (device) startFurnitureMove(device, event);
+        return;
+    }
+    pickStorage(id);
+}
+
 function pickStorage(id: string) {
     const device = deviceOf(id);
     if (!device) return;
     if (mode.value === 'edit') {
         selectRoom(device.roomId);
-        browse.value = null;
-        detail.value = true;
         return;
     }
     openStorage(id);
 }
 
-/** 菜单项再点一次就回首页：不想要卡片时不必去够关闭按钮。 */
+/** 菜单项再点一次就回首页：不想要卡片时不必去够关闭按钮。
+    「家具」不是一张清单，而是一档独立的编辑态，走它自己的入口。 */
 function toggleMenu(id: MenuId) {
+    if (id === 'furniture') {
+        if (mode.value === 'furniture') goMenu('home');
+        else enterFurniture();
+        return;
+    }
     goMenu(menu.value === id ? 'home' : id);
 }
 
-/** 点柜子：直接看这个柜子里存了什么。 */
+/** 点家具：直接看这件家具里存了什么。 */
 function openStorage(id: string) {
     if (mode.value !== 'browse') return;
     const device = deviceOf(id);
@@ -555,7 +1103,9 @@ function goToHit(hit: SearchHit) {
         const item = store.items.find((entry) => entry.id === hit.id);
         if (item) locateItem(item);
     } else if (hit.kind === 'storage') {
-        pickStorage(hit.id);
+        // 摆家具时搜到的家具直接选中它，别去开「里面有东西」那张卡。
+        if (mode.value === 'furniture') selectFurniture(hit.id);
+        else pickStorage(hit.id);
     } else {
         openRoom(hit.id);
     }
@@ -589,6 +1139,10 @@ function toggleOverview() {
 
 /** 修改模式是一个显式开关：没开的时候画布只负责看和点。 */
 function toggleMode() {
+    if (mode.value === 'furniture') {
+        exitFurniture();
+        return;
+    }
     if (mode.value === 'edit') {
         const roomId = browseRoom.value?.id ?? store.selectedId;
         setMode('browse');
@@ -612,7 +1166,21 @@ function onShortcut(event: KeyboardEvent) {
         event.preventDefault();
         searchInput.value?.focus();
         searchInput.value?.select();
+        return;
     }
+    // 摆家具这一档不归 usePlanEditor 的键盘表管（那张表只认编辑模式），
+    // 所以 Delete 删家具在这里接一下。
+    if (mode.value !== 'furniture') return;
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+    if (
+        event.target instanceof Element &&
+        event.target.closest('input, select, textarea, button, [contenteditable]')
+    )
+        return;
+    const device = furnitureDevice.value;
+    if (!device) return;
+    event.preventDefault();
+    void removeFurniture(device);
 }
 onMounted(() => window.addEventListener('keydown', onShortcut));
 onUnmounted(() => window.removeEventListener('keydown', onShortcut));
@@ -625,12 +1193,19 @@ watch(
             if (mode.value === 'browse') browse.value = null;
             return;
         }
+        if (mode.value === 'furniture') {
+            browse.value = null;
+            detail.value = false;
+            // 在画布上点房间就是「下一件家具放这儿」。
+            furnitureRoomId.value = id;
+            return;
+        }
         if (mode.value === 'edit') {
             browse.value = null;
             detail.value = true;
             return;
         }
-        // 点柜子时已经定好了要看柜子，别再被"选中房间"覆盖回房间。
+        // 点家具时已经定好了要看家具，别再被「选中房间」覆盖回房间。
         if (browse.value?.kind === 'storage') return;
         if (browse.value?.kind === 'room' && browse.value.id === id) return;
         browse.value = { kind: 'room', id };
@@ -654,7 +1229,15 @@ watch(
     },
     { immediate: true },
 );
-/* 换房间或换柜子时，物品表单的"放哪个柜子"要跟着回到合理默认值。 */
+/* 选中家具后，重命名框跟上它的当前名字，尺寸/位置输入也照当前方框回填。 */
+watch(furnitureDevice, (device) => {
+    furnitureName.value = device?.name ?? '';
+    syncFurnitureForm();
+});
+/* 家具被拖到别的位置 / 别间房、或者房间本身变了，输入框都要跟着现实走。 */
+watch(furnitureBox, () => syncFurnitureForm());
+
+/* 换房间或换家具时，物品表单里「放在哪件家具」要跟着回到合理默认值。 */
 watch(browse, (target) => {
     itemStorageId.value = target?.kind === 'storage' ? target.id : null;
     resetItemForm();
@@ -760,7 +1343,7 @@ async function createPlan(template: boolean) {
     if (!(await store.createPlan(newPlanName.value))) return;
     if (template) {
         await store.replaceRooms(exampleRooms());
-        // 示例户型带着示例储物与物品：第一次打开就能试"点柜子看里面有什么"。
+        // 示例户型带着示例家具与物品：第一次打开就能试「点家具看里面有什么」。
         await store.importFurnishing(exampleStorage(), exampleItems());
     } else tool.value = 'room';
     await nextTick();
@@ -847,7 +1430,7 @@ async function exportSvg() {
                     <!-- 浏览模式：虚线 == 选中，全站只有这一种虚线。
                          没选中的房间不描边（本来就有墙体线稿，再叠一圈虚线太吵）；
                          鼠标压上去给一条很淡的实线当「这里能点」的提示，不是虚线。-->
-                    <g v-if="mode === 'browse'" pointer-events="none">
+                    <g v-if="mode !== 'edit'" pointer-events="none">
                         <rect
                             v-for="room in rooms"
                             :key="`edge-${room.id}`"
@@ -871,66 +1454,157 @@ async function exportSvg() {
                             stroke-linecap="butt"
                         />
                     </g>
-                    <!-- 储物设备：按房间自动铺成网格（不做自由拖拽）。
-                         浏览模式下它们是「点得进去的柜子」，点了就看里面存了什么；
+                    <!-- 家具：每件按自己的原型画（床有枕头、沙发有扶手、冰箱有门缝）。
+                         浏览模式下它们是「点得进去的家具」，点了就看里面存了什么；
                          鼠标压上去加深，和房间边界的提示语言保持一致。-->
-                    <g v-if="storageBoxes.length" class="storage-layer">
+                    <g v-if="storageViews.length" class="storage-layer">
                         <g
-                            v-for="box in storageBoxes"
-                            :key="box.id"
+                            v-for="view in storageViews"
+                            :key="view.box.id"
                             class="storage-box"
-                            :data-storage="box.id"
-                            @pointerdown.stop="pickStorage(box.id)"
-                            @pointerenter="hoverStorageId = box.id"
+                            :data-storage="view.box.id"
+                            @pointerdown.stop="onStoragePointerDown(view.box.id, $event)"
+                            @pointerenter="hoverStorageId = view.box.id"
                             @pointerleave="hoverStorageId = null"
                         >
-                            <!-- 柜子也落一层淡影，和墙体的光影方向保持一致（右下偏移） -->
+                            <!-- 命中区：家具本身是一堆形状拼出来的，其中很多是描边或 pointer-events:none，
+                                 整组 <g> 没有面积可命中，点上去只会落到地板矩形上。这里补一块透明的
+                                 矩形盖住整件家具，点击与拖动的落点才稳定。-->
                             <rect
-                                :x="box.x + 1.6 / zoom"
-                                :y="box.y + 2.2 / zoom"
-                                :width="box.width"
-                                :height="box.height"
+                                :x="view.box.x"
+                                :y="view.box.y"
+                                :width="view.box.width"
+                                :height="view.box.height"
+                                rx="1.5"
+                                fill="transparent"
+                                pointer-events="all"
+                            />
+                            <!-- 家具也落一层淡影，和墙体的光影方向保持一致（右下偏移） -->
+                            <rect
+                                :x="view.box.x + 1.6 / zoom"
+                                :y="view.box.y + 2.2 / zoom"
+                                :width="view.box.width"
+                                :height="view.box.height"
                                 rx="1.5"
                                 fill="#1d2418"
                                 :opacity="0.16"
                                 pointer-events="none"
                             />
+                            <g
+                                :transform="view.transform"
+                                :data-selected="view.box.id === activeStorageId"
+                                pointer-events="none"
+                            >
+                                <template
+                                    v-for="(shape, index) in view.drawing.shapes"
+                                    :key="index"
+                                >
+                                    <rect
+                                        v-if="shape.kind === 'rect'"
+                                        :x="shape.x"
+                                        :y="shape.y"
+                                        :width="shape.width"
+                                        :height="shape.height"
+                                        :rx="shape.rx"
+                                        :fill="shape.fill ?? 'none'"
+                                        :stroke="shape.stroke ?? 'none'"
+                                        :stroke-width="shape.strokeWidth ?? 0"
+                                        :opacity="shape.opacity ?? 1"
+                                    />
+                                    <line
+                                        v-else
+                                        :x1="shape.x1"
+                                        :y1="shape.y1"
+                                        :x2="shape.x2"
+                                        :y2="shape.y2"
+                                        :stroke="shape.stroke ?? 'none'"
+                                        :stroke-width="shape.strokeWidth ?? 1"
+                                        :opacity="shape.opacity ?? 1"
+                                        stroke-linecap="round"
+                                    />
+                                </template>
+                            </g>
+                            <!-- 悬停 / 选中才描这一圈：家具自己的细节已经够密，
+                                 常驻一圈描边会变成"每件家具都套了个框"。 -->
                             <rect
-                                :x="box.x"
-                                :y="box.y"
-                                :width="box.width"
-                                :height="box.height"
+                                v-if="
+                                    view.box.id === activeStorageId ||
+                                    view.box.id === hoverStorageId
+                                "
+                                :x="view.box.x"
+                                :y="view.box.y"
+                                :width="view.box.width"
+                                :height="view.box.height"
                                 rx="1.5"
-                                :data-selected="box.id === activeStorageId"
-                                :fill="
-                                    box.id === hoverStorageId
-                                        ? 'var(--sto-fill-strong)'
-                                        : 'var(--sto-fill)'
-                                "
+                                fill="none"
                                 :stroke="
-                                    box.id === activeStorageId
+                                    view.box.id === activeStorageId
                                         ? 'var(--brand)'
-                                        : box.id === hoverStorageId
-                                          ? 'var(--sto-text)'
-                                          : 'var(--sto-line)'
+                                        : 'var(--sto-text)'
                                 "
-                                :stroke-width="(box.id === activeStorageId ? 1.8 : 1) / zoom"
+                                :stroke-width="(view.box.id === activeStorageId ? 1.8 : 1) / zoom"
                                 :stroke-dasharray="
-                                    box.id === activeStorageId
+                                    view.box.id === activeStorageId
                                         ? `${6 / zoom} ${4 / zoom}`
                                         : undefined
                                 "
+                                pointer-events="none"
                             />
                             <text
-                                :x="box.x + box.width / 2"
-                                :y="box.y + box.height / 2 + 3.2 / zoom"
+                                v-if="view.box.height > 22 || view.box.id === activeStorageId"
+                                :x="view.box.x + view.box.width / 2"
+                                :y="view.box.y + view.box.height - 4 / zoom"
                                 text-anchor="middle"
-                                :font-size="9.5 / zoom"
+                                :font-size="8.5 / zoom"
                                 fill="var(--sto-text)"
                                 pointer-events="none"
                             >
-                                {{ box.name }}
+                                {{ view.box.name }}
                             </text>
+                        </g>
+                    </g>
+                    <!-- 拖放预览：跟着指针走的半透明家具，落在房间外会变红。 -->
+                    <g v-if="furnitureMoveGhost" class="storage-layer" pointer-events="none">
+                        <rect
+                            :x="furnitureMoveGhost.from.x"
+                            :y="furnitureMoveGhost.from.y"
+                            :width="furnitureMoveGhost.from.width"
+                            :height="furnitureMoveGhost.from.height"
+                            rx="1.5"
+                            fill="none"
+                            stroke="var(--line-strong)"
+                            :stroke-width="1 / zoom"
+                            :stroke-dasharray="`${5 / zoom} ${4 / zoom}`"
+                        />
+                        <rect
+                            :x="furnitureMoveGhost.drop.x"
+                            :y="furnitureMoveGhost.drop.y"
+                            :width="furnitureMoveGhost.drop.width"
+                            :height="furnitureMoveGhost.drop.height"
+                            rx="1.5"
+                            :fill="
+                                furnitureMoveGhost.drop.legal
+                                    ? 'var(--brand-soft)'
+                                    : 'var(--danger-soft)'
+                            "
+                            :stroke="
+                                furnitureMoveGhost.drop.legal ? 'var(--brand)' : 'var(--danger)'
+                            "
+                            :stroke-width="1.4 / zoom"
+                            :stroke-dasharray="`${6 / zoom} ${4 / zoom}`"
+                        />
+                    </g>
+                    <g v-if="furnitureGhost" class="storage-layer" pointer-events="none">
+                        <g :transform="`translate(${furnitureGhost.x} ${furnitureGhost.y})`">
+                            <rect
+                                :width="furnitureGhost.width"
+                                :height="furnitureGhost.height"
+                                rx="1.5"
+                                :fill="furnitureGhost.wash"
+                                :stroke="furnitureGhost.ink"
+                                :stroke-width="1.4 / zoom"
+                                :stroke-dasharray="`${6 / zoom} ${4 / zoom}`"
+                            />
                         </g>
                     </g>
                     <rect
@@ -1097,7 +1771,7 @@ async function exportSvg() {
             </div>
         </div>
 
-        <!--== 顶部居中：快捷搜索（物品 / 储物设备 / 房间 一起搜） ============-->
+        <!--== 顶部居中：快捷搜索（物品 / 家具 / 房间 一起搜） ================-->
         <div class="float-search">
             <label class="search-box">
                 <PlanIcon name="search" />
@@ -1105,8 +1779,8 @@ async function exportSvg() {
                     ref="searchInput"
                     v-model="searchQuery"
                     type="search"
-                    placeholder="搜物品、柜子或房间"
-                    aria-label="搜索物品、储物设备或房间"
+                    placeholder="搜物品、家具或房间"
+                    aria-label="搜索物品、家具或房间"
                     @focus="searchFocused = true"
                     @blur="searchFocused = false"
                     @keydown.esc.prevent="
@@ -1146,11 +1820,11 @@ async function exportSvg() {
                 v-else-if="searchFocused && searchQuery.trim() && !searchHits.length"
                 class="search-empty"
             >
-                没有叫「{{ searchQuery.trim() }}」的房间、柜子或物品
+                没有叫「{{ searchQuery.trim() }}」的房间、家具或物品
             </p>
         </div>
 
-        <!--== 左上：菜单（首页 / 房间 / 家具 / 储物 / 导出） ==-->
+        <!--== 左上：菜单（首页 / 房间 / 家具 / 导出） ========-->
         <nav class="float-rail rail-left" aria-label="菜单">
             <button
                 v-for="item in menus"
@@ -1180,8 +1854,43 @@ async function exportSvg() {
         <div class="float-toolbar" aria-label="绘图工具">
             <div v-if="mode === 'browse'" class="browse-hint">
                 <PlanIcon name="room" />
-                <span>拖动看图 · 点房间或柜子看里面</span>
+                <span>拖动看图 · 点房间或家具看里面</span>
             </div>
+            <template v-else-if="mode === 'furniture'">
+                <div class="browse-hint">
+                    <PlanIcon name="sofa" />
+                    <span>拖动家具换位置 · 从右侧挑一件放进房间</span>
+                </div>
+                <span class="tool-divider" />
+                <div class="history-group">
+                    <button
+                        title="撤销 (Ctrl+Z)"
+                        aria-label="撤销"
+                        :disabled="!store.canUndo"
+                        @click="store.undo()"
+                    >
+                        <PlanIcon name="undo" />
+                    </button>
+                    <button
+                        title="重做 (Ctrl+Shift+Z)"
+                        aria-label="重做"
+                        :disabled="!store.canRedo"
+                        @click="store.redo()"
+                    >
+                        <PlanIcon name="redo" />
+                    </button>
+                </div>
+                <span class="tool-divider" />
+                <button
+                    class="tool-button done-button"
+                    title="完成摆家具"
+                    :disabled="store.busy"
+                    @click="toggleMode"
+                >
+                    <PlanIcon name="check" />
+                    <span>完成</span>
+                </button>
+            </template>
             <template v-else>
                 <div class="tool-group">
                     <button
@@ -1316,12 +2025,233 @@ async function exportSvg() {
             </button>
         </div>
 
-        <!--== 右侧卡片 · 看内容（点房间 / 柜子） ==============================
+        <!--== 右侧卡片 · 摆家具（家具菜单专属） ==============================
+            这一档只管家具：清单、改名、换向、删除、从库里挑一件放进房间。
+            房间的尺寸、门窗、拆墙全部不在这里出现 —— 两件事分开，才不会互相打乱。-->
+        <FloatCard
+            v-if="rightCard === 'furniture'"
+            side="right"
+            eyebrow="FURNITURE"
+            title="摆家具"
+            :subtitle="
+                furnitureRoomId
+                    ? (store.rooms.find((room) => room.id === furnitureRoomId)?.name ?? '') +
+                      ' · ' +
+                      furnitureRoomStorage.length +
+                      ' 件'
+                    : '还没有房间'
+            "
+            :width="322"
+            :top="50"
+            stretch
+            @close="exitFurniture"
+        >
+            <div class="property-section">
+                <label class="field-label">
+                    放进哪个房间
+                    <select v-model="furnitureRoomId" aria-label="家具放进哪个房间">
+                        <option v-for="room in rooms" :key="room.id" :value="room.id">
+                            {{ room.name }}
+                        </option>
+                    </select>
+                </label>
+                <div class="card-list">
+                    <button
+                        v-for="device in furnitureRoomStorage"
+                        :key="device.id"
+                        class="card-list-item"
+                        :class="{ active: device.id === furnitureSelection }"
+                        @click="selectFurniture(device.id)"
+                    >
+                        <PlanIcon :name="iconOfKind(device.kind)" />
+                        <span class="item-main">
+                            {{ device.name }}
+                            <small>{{ deviceDetail(device) }}</small>
+                        </span>
+                        <span
+                            class="row-action"
+                            title="顺时针转 90°"
+                            role="button"
+                            tabindex="0"
+                            @click.stop="rotateDevice(device)"
+                            @keydown.enter.stop="rotateDevice(device)"
+                        >
+                            <PlanIcon name="redo" />
+                        </span>
+                        <span
+                            class="row-action"
+                            title="删除这件家具"
+                            role="button"
+                            tabindex="0"
+                            @click.stop="removeFurniture(device)"
+                            @keydown.enter.stop="removeFurniture(device)"
+                        >
+                            <PlanIcon name="trash" />
+                        </span>
+                    </button>
+                    <p v-if="!furnitureRoomStorage.length" class="field-help">
+                        这个房间还没有家具。从下面的家具库挑一件，拖进画布，或者点「放一件」。
+                    </p>
+                </div>
+            </div>
+
+            <div v-if="furnitureDevice" class="property-section">
+                <h4>
+                    选中的家具
+                    <span>{{ furnitureRotation }}°</span>
+                </h4>
+                <label class="field-label">
+                    名称
+                    <input
+                        v-model="furnitureName"
+                        aria-label="家具名称"
+                        maxlength="24"
+                        :disabled="store.busy"
+                        @keydown.enter="renameFurniture"
+                        @blur="renameFurniture"
+                    />
+                </label>
+                <button class="button full-width" :disabled="store.busy" @click="renameFurniture">
+                    <PlanIcon name="check" />
+                    保存名称
+                </button>
+            </div>
+
+            <div v-if="furnitureDevice" class="property-section">
+                <h4>
+                    尺寸
+                    <span>mm</span>
+                </h4>
+                <div class="size-fields">
+                    <label class="field-label">
+                        宽度
+                        <input
+                            v-model="furnitureWidth"
+                            aria-label="家具宽度"
+                            type="number"
+                            :min="FURNITURE_MIN_MM"
+                            :max="FURNITURE_MAX_MM"
+                            step="50"
+                            :disabled="store.busy"
+                            @change="applyFurniture('size')"
+                        />
+                    </label>
+                    <label class="field-label">
+                        进深
+                        <input
+                            v-model="furnitureHeight"
+                            aria-label="家具进深"
+                            type="number"
+                            :min="FURNITURE_MIN_MM"
+                            :max="FURNITURE_MAX_MM"
+                            step="50"
+                            :disabled="store.busy"
+                            @change="applyFurniture('size')"
+                        />
+                    </label>
+                </div>
+                <p class="field-help">
+                    填的是家具本体的宽和深；转 90° 时画布上占地宽深会跟着对调。
+                </p>
+            </div>
+
+            <div v-if="furnitureDevice" class="property-section">
+                <h4>
+                    位置
+                    <span>距墙 · mm</span>
+                </h4>
+                <div class="size-fields">
+                    <label class="field-label">
+                        距左墙
+                        <input
+                            v-model="furnitureLeft"
+                            aria-label="家具距左墙"
+                            type="number"
+                            min="0"
+                            step="50"
+                            :disabled="store.busy"
+                            @change="applyFurniture('position')"
+                        />
+                    </label>
+                    <label class="field-label">
+                        距上墙
+                        <input
+                            v-model="furnitureTop"
+                            aria-label="家具距上墙"
+                            type="number"
+                            min="0"
+                            step="50"
+                            :disabled="store.busy"
+                            @change="applyFurniture('position')"
+                        />
+                    </label>
+                </div>
+                <p class="field-help">
+                    在画布上按住它拖动更快，也能直接拖到别的房间；超出墙面会自动贴回墙内。
+                </p>
+            </div>
+
+            <div v-if="furnitureDevice" class="property-section">
+                <h4>朝向</h4>
+                <div class="chip-row">
+                    <button
+                        v-for="option in ROTATION_LABELS"
+                        :key="option.value"
+                        :class="{ chosen: furnitureRotation === option.value }"
+                        :aria-pressed="furnitureRotation === option.value"
+                        :disabled="store.busy"
+                        @click="applyFurnitureRotation(option.value)"
+                    >
+                        {{ option.label }}
+                    </button>
+                </div>
+                <p class="field-help">绕家具中心转，位置不变；横竖互换会尽量保住中心点。</p>
+            </div>
+
+            <div v-if="furnitureDevice && furnitureFormError" class="property-section">
+                <p class="field-help error">{{ furnitureFormError }}</p>
+            </div>
+
+            <div class="property-section">
+                <div class="furniture-library">
+                    <div class="library-head">
+                        <span>家具库</span>
+                        <small>拖进房间，或选中后点「放一件」</small>
+                    </div>
+                    <div class="library-grid">
+                        <button
+                            v-for="preset in FURNITURE_PRESETS"
+                            :key="preset.id"
+                            class="library-item"
+                            :class="{ chosen: newFurniturePreset === preset.id }"
+                            :disabled="store.busy"
+                            :title="preset.hint"
+                            @pointerdown="startFurnitureDrag(preset, $event)"
+                            @click="newFurniturePreset = preset.id"
+                        >
+                            <span class="library-name">{{ preset.name }}</span>
+                            <small>{{ mm(preset.width) }}×{{ mm(preset.height) }}</small>
+                        </button>
+                    </div>
+                    <button
+                        class="button full-width"
+                        :disabled="store.busy || !furnitureRoomId"
+                        @click="submitFurniture"
+                    >
+                        <PlanIcon name="plus" />
+                        放一件{{ chosenPreset.name }}
+                    </button>
+                    <p v-if="furnitureNotice" class="field-help error">{{ furnitureNotice }}</p>
+                </div>
+            </div>
+        </FloatCard>
+
+        <!--== 右侧卡片 · 看内容（点房间 / 家具） ==============================
             只回答一个问题：这里面有什么。名称 + 总件数 + 物品清单，
-            其余（柜子清单、修改入口、面积说明）都不在这里出现，
+            其余（家具清单、修改入口、面积说明）都不在这里出现，
             卡片贴着左侧菜单的顶部起，高度撑到画板底部，清单自己滚。-->
         <FloatCard
-            v-if="rightCard === 'browse'"
+            v-else-if="rightCard === 'browse'"
             side="right"
             :title="browseTitle"
             :subtitle="browseCountLabel"
@@ -1349,7 +2279,7 @@ async function exportSvg() {
                     这里还是空的。开启修改模式，把东西登记进来。
                 </p>
             </div>
-            <!-- 看内容是一回事，改是另一回事：只有从「房间 / 家具 / 储物」清单点进来
+            <!-- 看内容是一回事，改是另一回事：只有从「房间 / 家具」清单点进来
                  才提供修改入口；首页上点房间只是纯浏览，卡片里不出现任何修改操作。 -->
             <template v-if="menu !== 'home'" #footer>
                 <button
@@ -1702,75 +2632,8 @@ async function exportSvg() {
                         </button>
                     </div>
                 </div>
-                <!-- 柜子与物品：只有修改模式才出现表单，浏览模式在右侧「看内容」卡片里 -->
-                <div v-if="mode === 'edit'" class="property-section">
-                    <h4>
-                        柜子
-                        <span>{{ roomStorage.length }}</span>
-                    </h4>
-                    <div class="card-list">
-                        <button
-                            v-for="device in roomStorage"
-                            :key="device.id"
-                            class="card-list-item"
-                            @click="pickStorage(device.id)"
-                        >
-                            <PlanIcon :name="iconOfKind(device.kind)" />
-                            <span class="item-main">
-                                {{ device.name }}
-                                <small>{{ itemsOfStorage(device.id).length }} 件物品</small>
-                            </span>
-                            <span
-                                class="row-action"
-                                title="删除这个柜子"
-                                role="button"
-                                tabindex="0"
-                                @click.stop="store.removeStorage(device.id)"
-                                @keydown.enter.stop="store.removeStorage(device.id)"
-                            >
-                                <PlanIcon name="trash" />
-                            </span>
-                        </button>
-                        <p v-if="!roomStorage.length" class="field-help">
-                            还没有柜子。选个类型加一个，物品就能挂进去。
-                        </p>
-                    </div>
-                    <div class="storage-form">
-                        <div class="chip-row">
-                            <button
-                                v-for="kind in storageKinds"
-                                :key="kind.id"
-                                :class="{ chosen: newStorageKind === kind.id }"
-                                :disabled="store.busy"
-                                @click="newStorageKind = kind.id"
-                            >
-                                {{ kind.label }}
-                            </button>
-                        </div>
-                        <label class="field-label">
-                            柜子名称
-                            <input
-                                v-model="newStorageName"
-                                aria-label="柜子名称"
-                                maxlength="30"
-                                :placeholder="
-                                    storageKinds.find((kind) => kind.id === newStorageKind)?.label
-                                "
-                                :disabled="store.busy"
-                                @keydown.enter="submitStorage"
-                            />
-                        </label>
-                        <button
-                            class="button full-width"
-                            :disabled="store.busy"
-                            @click="submitStorage"
-                        >
-                            <PlanIcon name="plus" />
-                            加一个柜子
-                        </button>
-                    </div>
-                </div>
-
+                <!-- 物品：房间属性卡只管两房之间的东西。家具的增删移转
+                     全在左栏「家具」那一档，这里不再出现家具库。 -->
                 <div v-if="mode === 'edit'" class="property-section">
                     <h4>
                         物品
@@ -1794,7 +2657,7 @@ async function exportSvg() {
                                     ·
                                     {{
                                         item.storageId
-                                            ? (deviceOf(item.storageId)?.name ?? '柜子')
+                                            ? (deviceOf(item.storageId)?.name ?? '家具')
                                             : '未入柜'
                                     }}
                                 </small>
@@ -1851,7 +2714,7 @@ async function exportSvg() {
                                 放在
                                 <select
                                     v-model="itemStorageId"
-                                    aria-label="放在哪个柜子"
+                                    aria-label="放在哪件家具"
                                     :disabled="store.busy"
                                 >
                                     <option :value="null">房间空位</option>
@@ -1969,7 +2832,7 @@ async function exportSvg() {
             </template>
         </FloatCard>
 
-        <!--== 右侧卡片 · 清单（点左侧 房间 / 家具 / 储物） =================-->
+        <!--== 右侧卡片 · 清单（点左侧 房间 / 家具） =========================-->
         <FloatCard
             v-else-if="rightCard === 'list'"
             side="right"

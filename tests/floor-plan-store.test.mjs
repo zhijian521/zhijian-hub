@@ -599,6 +599,134 @@ describe('floor-plan-store · 储物设备与物品', () => {
         db.close();
     });
 
+    it('从家具库加进来的家具带着原型，位置先空着交给自动排布', () => {
+        const { db, run, room } = seed();
+        const state = run({
+            type: 'add-storage',
+            roomId: room.id,
+            name: '双人床',
+            kind: 'furniture',
+            preset: 'bed-double',
+        });
+        const bed = state.storage.at(-1);
+        assert.equal(bed.preset, 'bed-double');
+        assert.equal(bed.x, null, '点一下加进来时不该凭空编一个坐标');
+        assert.equal(bed.rotation, 0);
+        db.close();
+    });
+
+    it('place-storage 记住拖放落点，读回来还是那几个数', () => {
+        const { db, run, read, storage } = seed();
+        const state = run({
+            type: 'place-storage',
+            id: storage.id,
+            x: 24,
+            y: 36,
+            width: 108,
+            height: 36,
+            rotation: 90,
+        });
+        const placed = state.storage.find((device) => device.id === storage.id);
+        assert.deepEqual(
+            { x: placed.x, y: placed.y, width: placed.width, height: placed.height },
+            { x: 24, y: 36, width: 108, height: 36 },
+        );
+        assert.equal(placed.rotation, 90);
+        // 四档直角转角都能落库：180 度是「原地转半圈」，宽深不该被对调。
+        const upside = run({
+            type: 'place-storage',
+            id: storage.id,
+            x: 24,
+            y: 36,
+            width: 108,
+            height: 36,
+            rotation: 180,
+        }).storage.find((device) => device.id === storage.id);
+        assert.equal(upside.rotation, 180);
+        assert.deepEqual([upside.width, upside.height], [108, 36]);
+        // 落盘之后重新读一遍，确认真的写进了库而不是只活在返回值里。
+        assert.equal(read().storage[0].x, 24);
+        assert.equal(read().storage[0].rotation, 180);
+        db.close();
+    });
+
+    it('place-storage 拦住脏数据：尺寸越界、转角不是 0/90、家具不存在', () => {
+        const { db, run, storage } = seed();
+        const place = (patch) =>
+            run({
+                type: 'place-storage',
+                id: storage.id,
+                x: 10,
+                y: 10,
+                width: 60,
+                height: 30,
+                ...patch,
+            });
+        assert.throws(() => place({ width: 5 }), /家具宽度必须在/);
+        assert.throws(() => place({ height: 10000 }), /家具深度必须在/);
+        assert.throws(() => place({ width: '60' }), /家具宽度必须是数字/);
+        assert.throws(() => place({ x: Number.NaN }), /家具横坐标必须是数字/);
+        assert.throws(() => place({ rotation: 45 }), /家具转角只能是 0 \/ 90 \/ 180 \/ 270 度/);
+        assert.throws(() => place({ id: 'nope' }), /家具不存在/);
+        db.close();
+    });
+
+    it('place-storage 带上 roomId 就把家具搬到另一个房间，柜里的东西跟着走', () => {
+        const { db, run, room, storage } = seed();
+        const other = run({ type: 'add-room', rect: { x: 400, y: 0, width: 240, height: 180 } })
+            .rooms[1];
+        run({
+            type: 'add-item',
+            roomId: room.id,
+            storageId: storage.id,
+            name: '被子',
+            category: '衣物',
+        });
+        const state = run({
+            type: 'place-storage',
+            id: storage.id,
+            x: other.x + 20,
+            y: other.y + 20,
+            width: 108,
+            height: 36,
+            roomId: other.id,
+        });
+        const moved = state.storage.find((device) => device.id === storage.id);
+        assert.equal(moved.roomId, other.id, '家具的归属要跟着坐标一起换房间');
+        // 物品的 room_id 必填：柜子搬走了，里面的东西不能还记在原来的房间，
+        // 否则搜索定位会把人带到一个空房间。
+        assert.equal(state.items[0].roomId, other.id);
+        assert.equal(state.items[0].storageId, storage.id);
+        db.close();
+    });
+
+    it('place-storage 传了不存在的房间直接拒绝，只挪位置时不带 roomId 也照常', () => {
+        const { db, run, room, storage } = seed();
+        assert.throws(
+            () =>
+                run({
+                    type: 'place-storage',
+                    id: storage.id,
+                    x: 12,
+                    y: 12,
+                    width: 108,
+                    height: 36,
+                    roomId: 'nope',
+                }),
+            /房间不存在/,
+        );
+        const state = run({
+            type: 'place-storage',
+            id: storage.id,
+            x: 12,
+            y: 12,
+            width: 108,
+            height: 36,
+        });
+        assert.equal(state.storage[0].roomId, room.id, '不传 roomId 时归属不动');
+        db.close();
+    });
+
     it('删房间会连带删掉里面的柜子与物品', () => {
         const { db, run, room, storage } = seed();
         run({

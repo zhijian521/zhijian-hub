@@ -1490,10 +1490,10 @@ svg {
 }
 
 /*------------------------------------------------------------------------------
-  画布上的储物设备
+  画布上的家具
 ------------------------------------------------------------------------------*/
 
-/* 设备是 SVG 里的小方块，不接收指针事件以外的交互；光标提示"可以点进去"。 */
+/* 家具是 SVG 里的一小组图形，不接收指针事件以外的交互；光标提示"可以点进去"。 */
 .storage-box {
     cursor: pointer;
 }
@@ -1578,9 +1578,9 @@ svg {
     height: 14px;
 }
 
-/* 修改模式里的两个小表单：加柜子、登记物品。和上面的清单留一条虚线分开，
+/* 修改模式里的两个小表单：家具库、登记物品。和上面的清单留一条虚线分开，
    免得「删除」按钮和「新增」按钮贴在一起被误点。 */
-.storage-form,
+.furniture-library,
 .item-form {
     display: flex;
     flex-direction: column;
@@ -1590,9 +1590,86 @@ svg {
     border-top: 1px dashed var(--line);
 }
 
-.storage-form .chip-row,
 .item-form .chip-row {
     flex-wrap: wrap;
+}
+
+/*------------------------------------------------------------------------------
+  家具库：原型按三列铺开，一件家具一个格子
+------------------------------------------------------------------------------*/
+
+/* 家具库接在房间家具清单下面，用同一条虚线把它和「删除」按钮隔开。 */
+.furniture-library {
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+}
+
+.library-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.library-head > span {
+    color: var(--fg);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.library-head > small {
+    color: var(--fg-subtle);
+    font-size: 9px;
+}
+
+/* 三列正好放下 14 件原型：四列字会被挤断，两列又太高。 */
+.library-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 9px;
+}
+
+.library-item {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 6px 7px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: transparent;
+    text-align: left;
+}
+
+.library-item:hover:not(:disabled) {
+    border-color: var(--line-strong);
+    background: var(--surface);
+}
+
+.library-item.chosen {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+}
+
+.library-name {
+    overflow: hidden;
+    color: var(--fg);
+    font-size: 10.5px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.library-item.chosen .library-name {
+    color: var(--brand);
+}
+
+.library-item > small {
+    color: var(--fg-subtle);
+    font: 9px var(--font-mono);
+    letter-spacing: 0.2px;
 }
 
 .field-label select {

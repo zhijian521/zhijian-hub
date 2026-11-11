@@ -105,19 +105,31 @@ export interface FloorPlan {
     createdAt: string;
 }
 
-/** 储物设备形态。只影响图标与配色，不影响归属关系。 */
+/** 家具的粗分类。只影响图标与默认配色，不影响归属关系。 */
 export type StorageKind = 'cabinet' | 'shelf' | 'box' | 'furniture';
 
 /**
- * 储物设备：柜、架、箱、家具。一定挂在某个房间里。
- * 图纸上按房间内的固定网格自动排布（见 lib/plan-storage.ts），不做自由拖拽——
- * 这个应用要的是"东西在哪"，不是家具摆放模拟器。
+ * 家具（原来的「储物设备」）。家具与储物是一件事：
+ * 衣柜、书柜、冰箱都是"能放东西的家具"，所以只有这一张表。
+ * 一定挂在某个房间里。
+ *
+ * preset 是家具原型 id（见 lib/furniture-catalog.ts，例如 bed-double / wardrobe），
+ * 决定默认尺寸、配色与平面画法。位置四个字段可空：老数据没存过位置，
+ * 按房间网格自动排布（见 lib/plan-storage.ts）；用户拖放过的就有了确切坐标。
  */
 export interface StorageDevice {
     id: string;
     roomId: string;
     name: string;
     kind: StorageKind;
+    /** 家具原型 id；空串＝老数据，按 kind 通用画法。 */
+    preset?: string;
+    x?: number | null;
+    y?: number | null;
+    width?: number | null;
+    height?: number | null;
+    /** 平面转角，只有 0 / 90 两档（0° 或躺倒 90°）。 */
+    rotation?: number;
 }
 
 /**
@@ -176,8 +188,30 @@ export type FloorPlanCommand =
     | { type: 'set-room-floor'; id: string; floor: FloorMaterial | null }
     | { type: 'set-room-outdoor'; id: string; outdoor: boolean }
     | { type: 'set-room-open-walls'; id: string; openWalls: WallSide[] }
-    | { type: 'add-storage'; roomId: string; name: string; kind: StorageKind }
+    | {
+          type: 'add-storage';
+          roomId: string;
+          name: string;
+          kind: StorageKind;
+          preset?: string;
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+          rotation?: number;
+      }
     | { type: 'rename-storage'; id: string; name: string }
+    | {
+          type: 'place-storage';
+          id: string;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          rotation?: number;
+          /** 换到另一个房间时一起带上；只挪位置时可以不给。 */
+          roomId?: string;
+      }
     | { type: 'remove-storage'; id: string }
     | {
           type: 'add-item';

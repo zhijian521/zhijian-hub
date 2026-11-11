@@ -11,7 +11,7 @@
 const { DatabaseSync } = require('node:sqlite');
 
 /** 当前 schema 版本。新增表或列时 +1，并在 MIGRATIONS 里补一段。 */
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 /**
  * 版本 1：户型图与房间。
@@ -181,6 +181,27 @@ const SCHEMA_V8 = `ALTER TABLE openings ADD COLUMN swing TEXT NOT NULL DEFAULT '
 const SCHEMA_V9 = `ALTER TABLE openings ADD COLUMN depth REAL NOT NULL DEFAULT 26;`;
 
 /**
+ * 版本 10：家具可以拖放到房间里。
+ *
+ * 版本 4 建 storage 表时，家具只有"名字 + 形态"两样东西，位置完全由房间
+ * 宽度算网格得出来。现在家具是能拖放的实体，就得记下自己占的那块地：
+ * preset 是原型 id（床 / 衣柜 / 冰箱…），另外四列是确切位置与尺寸，
+ * rotation 只有 0 / 90 / 180 / 270 四档直角转角（这一列没有 CHECK，
+ * 老库升级时补 180 / 270 不需要再迁移一次，合法性由写入路径把关）。
+ *
+ * 四列都允许 NULL：老数据的家具没摆过，读到 NULL 就退回网格自动排布。
+ * 加列不需要换表，也不会动已有行。
+ */
+const SCHEMA_V10 = `
+ALTER TABLE storage ADD COLUMN preset TEXT NOT NULL DEFAULT '';
+ALTER TABLE storage ADD COLUMN x REAL;
+ALTER TABLE storage ADD COLUMN y REAL;
+ALTER TABLE storage ADD COLUMN width REAL;
+ALTER TABLE storage ADD COLUMN height REAL;
+ALTER TABLE storage ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0;
+`;
+
+/**
  * 迁移脚本按版本号顺序执行：`MIGRATIONS[n]` 把库从版本 n 升到 n + 1。
  * 只向前迁移，不写回退逻辑（回退靠备份文件）。
  * @type {Array<(db: import('node:sqlite').DatabaseSync) => void>}
@@ -195,6 +216,7 @@ const MIGRATIONS = [
     (db) => db.exec(SCHEMA_V7),
     (db) => db.exec(SCHEMA_V8),
     (db) => db.exec(SCHEMA_V9),
+    (db) => db.exec(SCHEMA_V10),
 ];
 
 /**
