@@ -251,14 +251,6 @@ svg {
     color: var(--brand);
 }
 
-/* 「修改」开关打开时用主色实底：这是唯一能让画布变成可编辑的入口，
-   得一眼看出「现在正在改，不是在看」。 */
-.float-rail button.editing:not(:disabled) {
-    background: var(--brand);
-    border-color: var(--brand);
-    color: var(--on-brand);
-}
-
 .rail-divider {
     height: 1px;
     margin: 2px 4px;
@@ -330,6 +322,20 @@ svg {
 }
 
 .tool-button.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: var(--on-brand);
+}
+
+/* 修改模式的唯一出口：工具条最右边这一枚。
+   和左边一排「选工具」区分开 —— 它不是工具，是收工。 */
+.done-button {
+    border-color: var(--brand);
+    color: var(--brand);
+    font-weight: 600;
+}
+
+.done-button:hover:not(:disabled) {
     background: var(--brand);
     border-color: var(--brand);
     color: var(--on-brand);
@@ -423,10 +429,33 @@ svg {
     min-width: 0;
 }
 
+/* 图纸角标：既是图名，也是「图纸概览」的入口（左栏那枚「图纸」按钮已撤） */
 .dock-sheet {
     flex: 0 1 auto;
     overflow: hidden;
     max-width: 240px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.dock-sheet:hover {
+    background: var(--sunken);
+}
+
+.dock-sheet.active {
+    border-color: var(--line);
+    background: var(--sunken);
+}
+
+.dock-sheet.active .sheet-title {
+    color: var(--brand);
 }
 
 .sheet-no {
@@ -494,8 +523,14 @@ svg {
     font-size: 10.5px;
 }
 
-.dock-views button:hover {
+.dock-views button:hover:not(:disabled) {
     color: var(--fg-muted);
+}
+
+/* 浏览态不画尺寸链，这一枚开关跟着一起失效，免得点着没反应 */
+.dock-views button:disabled {
+    opacity: 0.45;
+    cursor: default;
 }
 
 .dock-views button.active {
@@ -1521,6 +1556,26 @@ svg {
 .row-action svg {
     width: 13px;
     height: 13px;
+}
+
+/* 房间清单一行的「修改」：浏览器里最常用的一条快捷路径，
+   常态收着（淡灰），悬停才亮起来，免得抢走整行「看内容」的主次。 */
+.edit-action {
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    color: var(--fg-subtle);
+}
+
+.edit-action:hover,
+.edit-action:focus-visible {
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.edit-action svg {
+    width: 14px;
+    height: 14px;
 }
 
 /* 修改模式里的两个小表单：加柜子、登记物品。和上面的清单留一条虚线分开，

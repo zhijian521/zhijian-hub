@@ -5,9 +5,12 @@
   布局原则：界面里没有一条常驻的 header / footer / 侧边栏，画布铺满整个窗口。
   所有控件都是浮在画布上的「悬浮件」：
     · 顶部居中 —— 快捷搜索（物品 / 储物设备 / 房间）
-    · 左上角   —— 菜单（首页 / 房间 / 家具 / 储物 / 修改 / 图纸 / 导出）
-    · 底部居中 —— 绘图工具与撤销重做（仅修改模式，浮在底栏之上）
-    · 底部整条 —— 一条底栏：图纸角标 · 图层开关 · 比例尺 · 缩放
+    · 左上角   —— 菜单（首页 / 房间 / 家具 / 储物 / 导出）
+    · 底部居中 —— 绘图工具、撤销重做与「完成」（仅修改模式，浮在底栏之上）
+    · 底部整条 —— 一条底栏：图纸角标（也是图纸概览入口）· 图层开关 · 比例尺 · 缩放
+
+  修改模式没有常驻开关：入口是「房间」清单每一行行尾的修改按钮，
+  以及房间内容卡底部的「修改这个房间」；唯一的出口是工具条最右边的「完成」。
 
   右侧是唯一的详情区，三种内容互斥：
     · 看内容 —— 点房间或柜子，列出里面存着的东西（浏览模式的主视角）
@@ -143,6 +146,11 @@ const searchOpen = computed(
 const showDimensions = ref(true);
 const showMaterials = ref(false);
 const showGrid = ref(true);
+/* 房间名、面积、侧边尺寸链只在**修改模式**里画。
+   浏览态一律是干净底图 —— 首页、三个清单页、以及在房间菜单里选中某一间看内容，
+   都算浏览态：这些时候要回答的是「东西在哪」，文字会压在柜子方块上，
+   尺寸链还会围着墙绕一圈。需要知道「这是哪一间、多大」的只有改图的时候。 */
+const showRoomLabels = computed(() => mode.value === 'edit');
 const newPlanName = ref('我的家');
 const name = ref('');
 const width = ref(0);
@@ -473,11 +481,17 @@ const tools: { id: PlanTool; label: string; key: string; detail: string }[] = [
 ];
 
 /*== 导航 ==================================================================*/
-/** 左侧菜单：首页永远只是「收起一切」；其余三项各打开一张清单。 */
+/** 左侧菜单：首页永远只是「收起一切」；其余三项各打开一张清单。
+    回首页是彻底的「收工」：选中清空、卡片全关，正在修改的话连修改模式一起退出 ——
+    否则回到首页还留着可编辑的工具条和属性卡，和"首页只是看"的定位不符。 */
 function goMenu(id: MenuId) {
     menu.value = id;
     browse.value = null;
     detail.value = false;
+    if (id === 'home') {
+        selectRoom(null);
+        if (mode.value === 'edit') setMode('browse');
+    }
 }
 
 /** 点房间：浏览模式看里面有什么，修改模式才进属性。 */
@@ -549,6 +563,28 @@ function goToHit(hit: SearchHit) {
     searchQuery.value = '';
     searchFocused.value = false;
     searchInput.value?.blur();
+}
+
+/** 「修改这个房间」：从看内容一步跨进编辑态，直接带着这一间进属性卡。
+    房间清单的每一行、以及右侧内容卡的底部按钮，都走这一个入口。 */
+function editRoom(id: string) {
+    if (mode.value !== 'edit') setMode('edit');
+    selectRoom(id);
+    browse.value = null;
+    detail.value = true;
+    focusRoom(id);
+}
+
+/** 图纸概览：左栏不再有「图纸」按钮，入口改到底栏那张图纸角标上。 */
+function toggleOverview() {
+    if (detail.value && !selectedRoom.value && !selectedOpening.value) {
+        detail.value = false;
+        return;
+    }
+    browse.value = null;
+    selectRoom(null);
+    menu.value = 'home';
+    detail.value = true;
 }
 
 /** 修改模式是一个显式开关：没开的时候画布只负责看和点。 */
@@ -804,8 +840,9 @@ async function exportSvg() {
                 <g :transform="`translate(${pan.x}, ${pan.y}) scale(${zoom})`">
                     <PlanDrawing
                         :rooms="rooms"
-                        :dimensions="showDimensions"
+                        :dimensions="showDimensions && showRoomLabels"
                         :materials="showMaterials"
+                        :labels="showRoomLabels"
                     />
                     <!-- 浏览模式：虚线 == 选中，全站只有这一种虚线。
                          没选中的房间不描边（本来就有墙体线稿，再叠一圈虚线太吵）；
@@ -1052,7 +1089,7 @@ async function exportSvg() {
             >
                 <PlanIcon name="room" />
                 <h3>从一个房间开始</h3>
-                <p>点「开始修改」进入修改模式，在画布上拖出它的轮廓。</p>
+                <p>点下面的按钮进入修改模式，在画布上拖出它的轮廓。</p>
                 <button class="button primary" @click="chooseTool('room')">绘制第一个房间</button>
                 <button class="text-button" :disabled="store.busy" @click="loadExample">
                     使用两室一厅示例
@@ -1113,7 +1150,7 @@ async function exportSvg() {
             </p>
         </div>
 
-        <!--== 左上：菜单（首页 / 房间 / 家具 / 储物 / 修改 / 图纸 / 导出） ==-->
+        <!--== 左上：菜单（首页 / 房间 / 家具 / 储物 / 导出） ==-->
         <nav class="float-rail rail-left" aria-label="菜单">
             <button
                 v-for="item in menus"
@@ -1128,27 +1165,6 @@ async function exportSvg() {
                 <span>{{ item.label }}</span>
             </button>
             <span class="rail-divider" />
-            <button
-                :title="mode === 'edit' ? '完成修改 (E)' : '开始修改户型 (E)'"
-                :aria-label="mode === 'edit' ? '完成修改' : '开始修改户型'"
-                :class="{ active: mode === 'edit', editing: mode === 'edit' }"
-                :aria-pressed="mode === 'edit'"
-                :disabled="!store.hasPlan || store.busy"
-                @click="toggleMode"
-            >
-                <PlanIcon :name="mode === 'edit' ? 'check' : 'room'" />
-                <span>{{ mode === 'edit' ? '完成' : '修改' }}</span>
-            </button>
-            <button
-                title="图纸"
-                aria-label="图纸"
-                :class="{ active: detail }"
-                :aria-pressed="detail"
-                @click="detail = !detail"
-            >
-                <PlanIcon name="room" />
-                <span>图纸</span>
-            </button>
             <button
                 title="导出图纸"
                 aria-label="导出图纸"
@@ -1207,6 +1223,16 @@ async function exportSvg() {
                         <PlanIcon name="redo" />
                     </button>
                 </div>
+                <span class="tool-divider" />
+                <button
+                    class="tool-button done-button"
+                    title="完成修改 (E)"
+                    :disabled="store.busy"
+                    @click="toggleMode"
+                >
+                    <PlanIcon name="check" />
+                    <span>完成</span>
+                </button>
             </template>
         </div>
 
@@ -1215,7 +1241,16 @@ async function exportSvg() {
              尽量把画板让出来。缩放单独放右下角，两者互不牵连。
              绘制工具条与浏览提示仍浮在左下底栏上方（见 float-toolbar）。-->
         <footer v-if="store.hasPlan" class="float-dock" aria-label="图纸信息与视图控制">
-            <div class="dock-group dock-sheet">
+            <!-- 图纸角标同时是「图纸概览」的入口：左栏那枚按钮撤掉后，
+                 这块本来就写着图名的地方成了最自然的落点。 -->
+            <button
+                class="dock-group dock-sheet"
+                :class="{ active: detail }"
+                :aria-pressed="detail"
+                title="图纸概览：总平面面积与图纸表达"
+                aria-label="图纸概览"
+                @click="toggleOverview"
+            >
                 <span class="sheet-no">01</span>
                 <span class="sheet-title">{{ store.plan?.name || '住宅平面图' }}</span>
                 <span class="dock-north" title="图纸上方" aria-label="图纸上方">
@@ -1224,15 +1259,16 @@ async function exportSvg() {
                         <path d="M12 2v35" stroke="currentColor" />
                     </svg>
                 </span>
-            </div>
+            </button>
 
             <span class="dock-divider" />
 
             <div class="dock-views" role="group" aria-label="图层显示">
                 <button
-                    :class="{ active: showDimensions }"
-                    :aria-pressed="showDimensions"
-                    title="显示房间尺寸标注"
+                    :class="{ active: showDimensions && showRoomLabels }"
+                    :aria-pressed="showDimensions && showRoomLabels"
+                    :disabled="!showRoomLabels"
+                    :title="showRoomLabels ? '显示房间尺寸标注' : '尺寸标注只在修改模式里显示'"
                     @click="showDimensions = !showDimensions"
                 >
                     尺寸
@@ -1313,6 +1349,18 @@ async function exportSvg() {
                     这里还是空的。开启修改模式，把东西登记进来。
                 </p>
             </div>
+            <!-- 看内容是一回事，改是另一回事：只有从「房间 / 家具 / 储物」清单点进来
+                 才提供修改入口；首页上点房间只是纯浏览，卡片里不出现任何修改操作。 -->
+            <template v-if="menu !== 'home'" #footer>
+                <button
+                    class="button full-width"
+                    :disabled="!browseRoom || store.busy"
+                    @click="browseRoom && editRoom(browseRoom.id)"
+                >
+                    <PlanIcon name="room" />
+                    修改这个房间
+                </button>
+            </template>
         </FloatCard>
 
         <!--== 右侧卡片 · 属性（仅修改模式） =================================-->
@@ -1484,7 +1532,7 @@ async function exportSvg() {
                         v-if="mode === 'browse'"
                         class="button full-width"
                         :disabled="!store.hasPlan || store.busy"
-                        @click="toggleMode"
+                        @click="editRoom(selectedRoom.id)"
                     >
                         <PlanIcon name="room" />
                         修改这个房间
@@ -1945,14 +1993,31 @@ async function exportSvg() {
                         <small>{{ entry.detail }}</small>
                     </span>
                     <span class="item-count">{{ entry.count }}</span>
+                    <span
+                        v-if="entry.kind === 'room'"
+                        class="row-action edit-action"
+                        role="button"
+                        tabindex="0"
+                        title="修改这个房间"
+                        aria-label="修改这个房间"
+                        @click.stop="editRoom(entry.id)"
+                        @keydown.enter.stop.prevent="editRoom(entry.id)"
+                        @keydown.space.stop.prevent="editRoom(entry.id)"
+                    >
+                        <PlanIcon name="room" />
+                    </span>
                     <PlanIcon name="chevron" />
                 </button>
                 <p v-if="!listEntries.length" class="card-placeholder">{{ listEmpty }}</p>
             </div>
             <template v-if="!listEntries.length" #footer>
-                <button class="button full-width" @click="toggleMode">
+                <button
+                    class="button full-width"
+                    :disabled="!store.hasPlan"
+                    @click="chooseTool('room')"
+                >
                     <PlanIcon name="plus" />
-                    {{ mode === 'edit' ? '正在修改' : '开始修改' }}
+                    开始修改
                 </button>
             </template>
         </FloatCard>

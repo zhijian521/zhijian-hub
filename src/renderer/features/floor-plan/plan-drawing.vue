@@ -20,8 +20,14 @@ import {
 import { roomArea } from '@/stores/floor-plan';
 
 const props = withDefaults(
-    defineProps<{ rooms: Room[]; dimensions?: boolean; materials?: boolean }>(),
-    { dimensions: true, materials: false },
+    defineProps<{
+        rooms: Room[];
+        dimensions?: boolean;
+        materials?: boolean;
+        /*-- 房间名与面积：只在修改模式画（浏览态要保持一张干净底图），由画板下传 --*/
+        labels?: boolean;
+    }>(),
+    { dimensions: true, materials: false, labels: true },
 );
 const walls = computed(() => buildWalls(props.rooms));
 const dimensions = computed(() => dimensionsOf(props.rooms));
@@ -817,7 +823,7 @@ function jambsOf(box: Rect, wall: WallSide) {
         </g>
 
         <!-- 房间名与面积压白色描边上：纹理再花也不会把字吃掉 -->
-        <g fill="#34473b" text-anchor="middle" pointer-events="none">
+        <g v-if="props.labels" fill="#34473b" text-anchor="middle" pointer-events="none">
             <g
                 v-for="room in rooms"
                 :key="room.id"
