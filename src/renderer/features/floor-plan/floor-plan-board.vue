@@ -65,6 +65,7 @@ import {
     type StorageBox,
 } from '@/lib/plan-storage';
 import {
+    FURNITURE_GROUPS,
     FURNITURE_PRESETS,
     furnitureDrawing,
     isSideways,
@@ -238,6 +239,44 @@ const storageViews = computed(() =>
         };
     }),
 );
+/**
+ * 家具库格子里的小预览：直接把家具的平面画法按原比例缩进一个小视口。
+ * 用同一套 furnitureDrawing 就意味着一件家具在库里和在画布上是同一个样子，
+ * 不会出现「库里是个方块、放到地上变成床」的落差。
+ */
+interface LibraryPreview {
+    preset: FurniturePreset;
+    viewBox: string;
+    shapes: FurnitureDrawing['shapes'];
+}
+
+function previewOf(preset: FurniturePreset): LibraryPreview {
+    const drawing = furnitureDrawing({
+        preset: preset.id,
+        width: preset.width,
+        height: preset.height,
+    });
+    return {
+        preset,
+        viewBox: `0 0 ${drawing.localWidth} ${drawing.localHeight}`,
+        shapes: drawing.shapes,
+    };
+}
+
+const libraryPreviews = computed(() => {
+    const map = new Map<string, LibraryPreview>();
+    for (const preset of FURNITURE_PRESETS) map.set(preset.id, previewOf(preset));
+    return map;
+});
+
+/** 家具库按分组铺开：卧室 / 客厅 / 厨房 / 卫浴 / 软装，找一件东西不用从头扫到尾。 */
+const libraryGroups = computed(() =>
+    FURNITURE_GROUPS.map((group) => ({
+        ...group,
+        presets: FURNITURE_PRESETS.filter((preset) => preset.group === group.id),
+    })).filter((group) => group.presets.length > 0),
+);
+
 const roomNames = computed(() => new Map(rooms.value.map((room) => [room.id, room.name])));
 
 const itemsOfRoom = (roomId: string) => store.items.filter((item) => item.roomId === roomId);
@@ -1511,6 +1550,17 @@ async function exportSvg() {
                                         :stroke-width="shape.strokeWidth ?? 0"
                                         :opacity="shape.opacity ?? 1"
                                     />
+                                    <ellipse
+                                        v-else-if="shape.kind === 'ellipse'"
+                                        :cx="shape.cx"
+                                        :cy="shape.cy"
+                                        :rx="shape.rx"
+                                        :ry="shape.ry"
+                                        :fill="shape.fill ?? 'none'"
+                                        :stroke="shape.stroke ?? 'none'"
+                                        :stroke-width="shape.strokeWidth ?? 0"
+                                        :opacity="shape.opacity ?? 1"
+                                    />
                                     <line
                                         v-else
                                         :x1="shape.x1"
@@ -1519,6 +1569,7 @@ async function exportSvg() {
                                         :y2="shape.y2"
                                         :stroke="shape.stroke ?? 'none'"
                                         :stroke-width="shape.strokeWidth ?? 1"
+                                        :stroke-dasharray="shape.dash"
                                         :opacity="shape.opacity ?? 1"
                                         stroke-linecap="round"
                                     />
@@ -2218,20 +2269,72 @@ async function exportSvg() {
                         <span>家具库</span>
                         <small>拖进房间，或选中后点「放一件」</small>
                     </div>
-                    <div class="library-grid">
-                        <button
-                            v-for="preset in FURNITURE_PRESETS"
-                            :key="preset.id"
-                            class="library-item"
-                            :class="{ chosen: newFurniturePreset === preset.id }"
-                            :disabled="store.busy"
-                            :title="preset.hint"
-                            @pointerdown="startFurnitureDrag(preset, $event)"
-                            @click="newFurniturePreset = preset.id"
-                        >
-                            <span class="library-name">{{ preset.name }}</span>
-                            <small>{{ mm(preset.width) }}×{{ mm(preset.height) }}</small>
-                        </button>
+                    <div v-for="group in libraryGroups" :key="group.id" class="library-group">
+                        <span class="library-group-name">{{ group.label }}</span>
+                        <div class="library-grid">
+                            <button
+                                v-for="preset in group.presets"
+                                :key="preset.id"
+                                class="library-item"
+                                :class="{ chosen: newFurniturePreset === preset.id }"
+                                :disabled="store.busy"
+                                :title="preset.hint"
+                                @pointerdown="startFurnitureDrag(preset, $event)"
+                                @click="newFurniturePreset = preset.id"
+                            >
+                                <svg
+                                    v-if="libraryPreviews.get(preset.id)"
+                                    class="library-preview"
+                                    :viewBox="libraryPreviews.get(preset.id)!.viewBox"
+                                    preserveAspectRatio="xMidYMid meet"
+                                    aria-hidden="true"
+                                >
+                                    <template
+                                        v-for="(shape, index) in libraryPreviews.get(preset.id)!
+                                            .shapes"
+                                        :key="index"
+                                    >
+                                        <rect
+                                            v-if="shape.kind === 'rect'"
+                                            :x="shape.x"
+                                            :y="shape.y"
+                                            :width="shape.width"
+                                            :height="shape.height"
+                                            :rx="shape.rx"
+                                            :fill="shape.fill ?? 'none'"
+                                            :stroke="shape.stroke ?? 'none'"
+                                            :stroke-width="shape.strokeWidth ?? 0"
+                                            :opacity="shape.opacity ?? 1"
+                                        />
+                                        <ellipse
+                                            v-else-if="shape.kind === 'ellipse'"
+                                            :cx="shape.cx"
+                                            :cy="shape.cy"
+                                            :rx="shape.rx"
+                                            :ry="shape.ry"
+                                            :fill="shape.fill ?? 'none'"
+                                            :stroke="shape.stroke ?? 'none'"
+                                            :stroke-width="shape.strokeWidth ?? 0"
+                                            :opacity="shape.opacity ?? 1"
+                                        />
+                                        <line
+                                            v-else
+                                            :x1="shape.x1"
+                                            :y1="shape.y1"
+                                            :x2="shape.x2"
+                                            :y2="shape.y2"
+                                            :stroke="shape.stroke ?? 'none'"
+                                            :stroke-width="shape.strokeWidth ?? 1"
+                                            :stroke-dasharray="shape.dash"
+                                            :opacity="shape.opacity ?? 1"
+                                            stroke-linecap="round"
+                                        />
+                                    </template>
+                                </svg>
+                                <span class="library-name">{{ preset.name }}</span>
+                                <small>{{ mm(preset.width) }}×{{ mm(preset.height) }}</small>
+                            </button>
+                        </div>
                     </div>
                     <button
                         class="button full-width"

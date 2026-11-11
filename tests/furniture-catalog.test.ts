@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+    FURNITURE_GROUPS,
     FURNITURE_PRESETS,
     FURNITURE_ROTATIONS,
     isSideways,
@@ -95,6 +96,23 @@ describe('furniture-catalog · 平面画法', () => {
                         (shape.y ?? 0) + (shape.height ?? 0) <= drawing.localHeight + 0.01,
                         `${preset.name} 下越界`,
                     );
+                } else if (shape.kind === 'ellipse') {
+                    assert.ok(
+                        (shape.cx ?? 0) - (shape.rx ?? 0) >= -0.01,
+                        `${preset.name} 椭圆左越界`,
+                    );
+                    assert.ok(
+                        (shape.cy ?? 0) - (shape.ry ?? 0) >= -0.01,
+                        `${preset.name} 椭圆上越界`,
+                    );
+                    assert.ok(
+                        (shape.cx ?? 0) + (shape.rx ?? 0) <= drawing.localWidth + 0.01,
+                        `${preset.name} 椭圆右越界`,
+                    );
+                    assert.ok(
+                        (shape.cy ?? 0) + (shape.ry ?? 0) <= drawing.localHeight + 0.01,
+                        `${preset.name} 椭圆下越界`,
+                    );
                 } else {
                     for (const value of [shape.x1, shape.x2]) {
                         assert.ok(
@@ -178,5 +196,57 @@ describe('furniture-catalog · 平面画法', () => {
         const drawing = furnitureDrawing({ preset: null, width: 60, height: 30 });
         assert.equal(drawing.shapes.length >= 2, true);
         assert.equal(drawing.localWidth, 60);
+    });
+});
+
+describe('furniture-catalog · 分组与画法层次', () => {
+    it('原型够多，并且五组都有人', () => {
+        assert.ok(FURNITURE_PRESETS.length >= 28, '常见家具至少要有近三十件');
+        for (const group of FURNITURE_GROUPS) {
+            assert.ok(
+                FURNITURE_PRESETS.some((preset) => preset.group === group.id),
+                `「${group.label}」组里一件家具都没有`,
+            );
+        }
+        const grouped = new Set(FURNITURE_PRESETS.map((preset) => preset.group));
+        assert.equal(grouped.size, FURNITURE_GROUPS.length, '有家具落在没登记的组里');
+    });
+
+    it('每件都是「轮廓 + 受光 + 细节」，不是一块平色', () => {
+        for (const preset of FURNITURE_PRESETS) {
+            const drawing = furnitureDrawing({
+                preset: preset.id,
+                width: preset.width,
+                height: preset.height,
+            });
+            // 至少 4 笔：本体、受光带、落影带、一处细节。
+            assert.ok(
+                drawing.shapes.length >= 4,
+                `${preset.name} 只有 ${drawing.shapes.length} 笔`,
+            );
+        }
+    });
+
+    it('画法用上了椭圆：圆形的卫浴、绿植、灯都得是圆的', () => {
+        const ellipsePresets = FURNITURE_PRESETS.filter((preset) =>
+            furnitureDrawing({
+                preset: preset.id,
+                width: preset.width,
+                height: preset.height,
+            }).shapes.some((shape) => shape.kind === 'ellipse'),
+        );
+        assert.ok(ellipsePresets.length >= 4, '椭圆图元几乎没被用上');
+    });
+
+    it('缩到极小尺寸时椭圆也不会翻出轮廓', () => {
+        for (const size of [20, 26]) {
+            const drawing = furnitureDrawing({ preset: 'toilet', width: size, height: size });
+            for (const shape of drawing.shapes) {
+                if (shape.kind !== 'ellipse') continue;
+                assert.ok((shape.cx ?? 0) - (shape.rx ?? 0) >= -0.01);
+                assert.ok((shape.cx ?? 0) + (shape.rx ?? 0) <= size + 0.01);
+                assert.ok((shape.cy ?? 0) + (shape.ry ?? 0) <= size + 0.01);
+            }
+        }
     });
 });

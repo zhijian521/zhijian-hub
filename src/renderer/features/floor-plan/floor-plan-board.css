@@ -1623,12 +1623,30 @@ svg {
     font-size: 9px;
 }
 
-/* 三列正好放下 14 件原型：四列字会被挤断，两列又太高。 */
+/* 家具库按房间分组：每组一个小标题 + 三列格子，找一件东西不用从头扫到尾。 */
+.library-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.library-group + .library-group {
+    margin-top: 2px;
+}
+
+.library-group-name {
+    color: var(--fg-subtle);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+}
+
+/* 三列正好放下原型：四列字会被挤断，两列又太高。 */
 .library-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
-    margin-bottom: 9px;
+    margin-bottom: 4px;
 }
 
 .library-item {
@@ -1636,7 +1654,7 @@ svg {
     min-width: 0;
     flex-direction: column;
     gap: 2px;
-    padding: 6px 6px 7px;
+    padding: 5px 6px 6px;
     border: 1px solid var(--line);
     border-radius: 7px;
     background: transparent;
@@ -1651,6 +1669,20 @@ svg {
 .library-item.chosen {
     border-color: var(--brand);
     background: var(--brand-soft);
+}
+
+/* 每个格子上方一张小平面图：和画布上同一套画法按比例缩进来，
+   一眼看得出这是床还是柜子，不用先放到地上再后悔。 */
+.library-preview {
+    width: 100%;
+    height: 26px;
+    margin-bottom: 1px;
+    flex: 0 0 auto;
+    opacity: 0.92;
+}
+
+.library-item.chosen .library-preview {
+    opacity: 1;
 }
 
 .library-name {
