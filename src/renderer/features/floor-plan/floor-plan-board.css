@@ -843,6 +843,11 @@ svg {
     color: var(--brand);
 }
 
+/* 开门方式那两组胶囊上下叠着，紧贴会看成一行。 */
+.chip-row + .chip-row {
+    margin-top: 6px;
+}
+
 /* 十种材质按两列排，正好五整行；三列会剩一个孤零零的格子。 */
 .material-options {
     display: grid;
@@ -1005,6 +1010,69 @@ svg {
     color: var(--fg-subtle);
     font-size: 9px;
     line-height: 1.7;
+}
+
+/*-- 打通：一行一条边，左墙名、中邻居、右当前状态。整行可点，不做小开关。 --*/
+.open-wall-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.open-wall-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.open-wall-row:hover:not(:disabled) {
+    border-color: var(--line-strong);
+}
+
+.open-wall-row:disabled {
+    opacity: 0.55;
+    cursor: progress;
+}
+
+.open-wall-row.active {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+}
+
+.open-wall-name {
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.open-wall-row small {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--fg-subtle);
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.open-wall-mark {
+    flex: 0 0 auto;
+    color: var(--fg-subtle);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+}
+
+.open-wall-row.active .open-wall-mark {
+    color: var(--brand);
+    font-weight: 600;
 }
 
 .field-help {

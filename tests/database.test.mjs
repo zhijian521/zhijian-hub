@@ -114,7 +114,7 @@ describe('openDatabase', () => {
         db.close();
     });
 
-    it('版本 5 的旧库升到版本 6 后，门与窗都还在，并且能存飘窗', () => {
+    it('版本 5 的旧库一路升到最新版本后，门与窗都还在，并且能存飘窗', () => {
         const file = join(workdir, 'openings-v5.db');
 
         // 造一个"版本 5"的库：openings 用版本 2 的老表结构（kind 只允许 door/window），
@@ -148,6 +148,9 @@ describe('openDatabase', () => {
             DROP TABLE openings;
             ALTER TABLE openings_v5 RENAME TO openings;
         `);
+        // 造库用的是当前代码，rooms 已经带 open_walls 列；要真的回到版本 5 的形状得先摘掉它，
+        // 否则 v6 → v7 的 ALTER TABLE 会撞「duplicate column name」。
+        old.exec('ALTER TABLE rooms DROP COLUMN open_walls');
         old.exec('PRAGMA foreign_keys = ON');
         old.exec('PRAGMA user_version = 5');
         old.close();
@@ -166,6 +169,69 @@ describe('openDatabase', () => {
                     'INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 )
                 .run('open-bay', 'room-old', 'bay', 'top', 90, 120, 'start', 2),
+        );
+        // 版本 8 给 openings 加了 swing 列，老图升上来一律朝内开。
+        const swings = db
+            .prepare('SELECT swing FROM openings WHERE room_id = ? ORDER BY sort_order')
+            .all('room-old')
+            .map((row) => row.swing);
+        assert.deepEqual(swings, ['in', 'in', 'in'], '旧门口升上来必须默认内开');
+        db.close();
+    });
+
+    it('版本 9 的飘窗进深能改，旧库升上来默认 26px', () => {
+        const file = join(workdir, 'openings-v9.db');
+        const db = openDatabase(file);
+        db.prepare(
+            'INSERT INTO floor_plan (id, name, room_seq, created_at) VALUES (?, ?, ?, ?)',
+        ).run('singleton', '家', 1, '2026-01-01');
+        db.prepare(
+            'INSERT INTO rooms (id, name, x, y, width, height, sort_order, floor, outdoor, open_walls) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ).run('r1', '主卧', 0, 0, 300, 200, 0, 'wood', 0, '');
+
+        // 不给 depth 就必须落默认值，老数据升上来也是这个路径。
+        db.prepare(
+            'INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, swing, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ).run('b1', 'r1', 'bay', 'top', 60, 120, 'start', 'in', 0);
+        assert.equal(
+            db.prepare('SELECT depth FROM openings WHERE id = ?').get('b1').depth,
+            26,
+            '缺省进深必须是 26px',
+        );
+
+        db.prepare('UPDATE openings SET depth = ? WHERE id = ?').run(40, 'b1');
+        assert.equal(db.prepare('SELECT depth FROM openings WHERE id = ?').get('b1').depth, 40);
+        db.close();
+    });
+
+    it('版本 8 的门开向能存外开，并且 CHECK 只认 in / out', () => {
+        const file = join(workdir, 'openings-v8.db');
+        const db = openDatabase(file);
+        db.prepare(
+            'INSERT INTO floor_plan (id, name, room_seq, created_at) VALUES (?, ?, ?, ?)',
+        ).run('singleton', '家', 1, '2026-01-01');
+        db.prepare(
+            'INSERT INTO rooms (id, name, x, y, width, height, sort_order, floor, outdoor, open_walls) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ).run('r1', '主卧', 0, 0, 300, 200, 0, 'wood', 0, '');
+
+        db.prepare(
+            'INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, swing, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ).run('d1', 'r1', 'door', 'top', 60, 54, 'start', 'out', 0);
+        assert.equal(
+            db.prepare('SELECT swing FROM openings WHERE id = ?').get('d1').swing,
+            'out',
+            '外开必须能写进库',
+        );
+
+        assert.throws(
+            () =>
+                db
+                    .prepare(
+                        'INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, swing, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    )
+                    .run('d2', 'r1', 'door', 'bottom', 60, 54, 'start', 'inside', 1),
+            /CHECK constraint failed/,
+            '开向只允许 in / out，脏值必须在库层面拦下',
         );
         db.close();
     });

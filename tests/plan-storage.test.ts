@@ -13,7 +13,18 @@ import type { Room, StorageDevice } from '../src/renderer/app/types.ts';
 ============================================================================*/
 
 function room(id: string, name: string, width = 216, height = 216): Room {
-    return { id, name, x: 100, y: 50, width, height, floor: null, openings: [] };
+    return {
+        id,
+        name,
+        x: 100,
+        y: 50,
+        width,
+        height,
+        floor: null,
+        outdoor: false,
+        openWalls: [],
+        openings: [],
+    };
 }
 
 function device(

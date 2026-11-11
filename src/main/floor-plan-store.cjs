@@ -17,8 +17,36 @@ const MAX_NAME_LENGTH = 40;
 /** 墙面方向：top/bottom 沿 x 轴（长度取 width），left/right 沿 y 轴（取 height）。 */
 const WALLS = new Set(['top', 'right', 'bottom', 'left']);
 
+/** 墙的固定书写顺序，写库与比较都用同一份，避免『top,left』和『left,top』被判成不同值。 */
+const WALL_ORDER = ['top', 'right', 'bottom', 'left'];
+
 /** 洞口类型：平开门、标准窗、飘窗（外凸一块带三面玻璃的平台）。 */
 const KINDS = new Set(['door', 'window', 'bay']);
+
+/** 门扇开向：朝房间内 / 朝房间外。窗与飘窗一律存 'in'。 */
+const SWINGS = new Set(['in', 'out']);
+
+/** 飘窗默认外凸进深 26px ≈ 430 mm，住宅飘窗的常见出挑量。 */
+const DEFAULT_BAY_DEPTH = 26;
+
+/** 进深可以调，但要有上下限：200 mm 以下画不出三线窗，1000 mm 以上会吃掉邻室地面。 */
+const MIN_OPENING_DEPTH = 12; // 200 mm
+const MAX_OPENING_DEPTH = 60; // 1000 mm
+
+/**
+ * 归一化洞口进深。undefined 表示「没提这一项」，用默认值；
+ * 给了就必须是落在上下限内的有限数，不然画出来的飘窗没法看。
+ * @param {unknown} value
+ * @param {string} label
+ */
+function normalizeDepth(value, label) {
+    if (value === undefined || value === null) return DEFAULT_BAY_DEPTH;
+    if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${label}进深必须是数字`);
+    if (value < MIN_OPENING_DEPTH || value > MAX_OPENING_DEPTH) {
+        fail(`${label}进深必须在 ${MIN_OPENING_DEPTH}–${MAX_OPENING_DEPTH} 像素之间`);
+    }
+    return value;
+}
 
 /** 地面材质。NULL 表示按房间名自动推断。
  * 只有 wood / tile / small 能按房间名推断，其余都只能手动指定。
@@ -50,6 +78,68 @@ const MAX_NOTE_LENGTH = 200;
 const MIN_OPENING_WIDTH = 24;
 
 const PLAN_ID = 'singleton';
+
+/** 库里存的 'top,left' → ['top', 'left']；空串和老库里的脏值都归一到空数组。 */
+function parseOpenWalls(value) {
+    if (typeof value !== 'string' || value === '') return [];
+    const seen = new Set(value.split(','));
+    return WALL_ORDER.filter((wall) => seen.has(wall));
+}
+
+/**
+ * 校验并归一来自命令或恢复数据的「拆掉的边墙」。
+ *
+ * 允许缺省（老客户端不带这个字段），缺省即四面墙都在；给了就必须是墙名的数组，
+ * 重复值会被去重而不是报错 —— 前端四个开关随手点两下不该让整张图存不下去。
+ */
+function normalizeOpenWalls(value) {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) fail('拆掉的墙必须是数组');
+    if (value.length > WALL_ORDER.length) fail('拆掉的墙数量无效');
+    const seen = new Set();
+    for (const wall of value) {
+        if (!WALLS.has(wall)) fail('拆掉的墙必须是 top / right / bottom / left');
+        seen.add(wall);
+    }
+    return WALL_ORDER.filter((wall) => seen.has(wall));
+}
+
+/** 一段墙的几何：朝向、所在直线的坐标、沿墙区间。 */
+function wallLineOf(room, side) {
+    const horizontal = side === 'top' || side === 'bottom';
+    return {
+        horizontal,
+        coordinate: horizontal
+            ? room.y + (side === 'bottom' ? room.height : 0)
+            : room.x + (side === 'right' ? room.width : 0),
+        start: horizontal ? room.x : room.y,
+        end: horizontal ? room.x + room.width : room.y + room.height,
+    };
+}
+
+/**
+ * 这面物理墙是不是已经被拆掉了。
+ *
+ * 拆墙不分是谁拆的：一面墙物理上只有一个，隔壁宣布拆掉，自己这边也就没墙了。
+ * 所以判断要把全屋的 open_walls 都看一遍，不能只查自己那一间。
+ */
+function openWallAt(db, roomId, wall) {
+    const rooms = db.prepare('SELECT id, x, y, width, height, open_walls FROM rooms').all();
+    const self = rooms.find((room) => room.id === roomId);
+    if (!self) return false;
+    const line = wallLineOf(self, wall);
+    return rooms.some((other) =>
+        parseOpenWalls(other.open_walls).some((side) => {
+            const target = wallLineOf(other, side);
+            return (
+                line.horizontal === target.horizontal &&
+                Math.abs(line.coordinate - target.coordinate) < 0.01 &&
+                line.start < target.end - 0.01 &&
+                target.start < line.end - 0.01
+            );
+        }),
+    );
+}
 
 // A door belongs to a room, but occupies a physical wall shared by both rooms.
 function checkSharedOpenings(state) {
@@ -92,10 +182,10 @@ function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
     try {
         db.exec('DELETE FROM rooms');
         const insertRoom = db.prepare(
-            'INSERT INTO rooms (id, name, x, y, width, height, floor, outdoor, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO rooms (id, name, x, y, width, height, floor, outdoor, open_walls, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         );
         const insertOpening = db.prepare(
-            'INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, swing, depth, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         );
         const ids = new Set();
         rawRooms.forEach((room, order) => {
@@ -119,6 +209,7 @@ function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
                 rect.height,
                 room.floor,
                 room.outdoor === true ? 1 : 0,
+                normalizeOpenWalls(room.openWalls).join(','),
                 order,
             );
             room.openings.forEach((o, index) => {
@@ -127,7 +218,8 @@ function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
                     typeof o !== 'object' ||
                     !WALLS.has(o.wall) ||
                     !KINDS.has(o.kind) ||
-                    !['start', 'end'].includes(o.hinge)
+                    !['start', 'end'].includes(o.hinge) ||
+                    (o.swing !== undefined && !SWINGS.has(o.swing))
                 )
                     fail('门窗参数无效');
                 const openingId = normalizeName(o.id, '门窗 id');
@@ -142,7 +234,18 @@ function replaceRooms(db, rawRooms, rawStorage = [], rawItems = []) {
                     o.pos + o.width > length + 0.01
                 )
                     fail('门窗超出墙面或尺寸无效');
-                insertOpening.run(openingId, id, o.kind, o.wall, o.pos, o.width, o.hinge, index);
+                insertOpening.run(
+                    openingId,
+                    id,
+                    o.kind,
+                    o.wall,
+                    o.pos,
+                    o.width,
+                    o.hinge,
+                    o.swing === 'out' ? 'out' : 'in',
+                    normalizeDepth(o.depth, '门窗'),
+                    index,
+                );
             });
         });
         // 储物设备与物品跟在房间后面恢复：撤销一次房间改动时，
@@ -292,7 +395,7 @@ function loadState(db) {
     const row = db.prepare('SELECT id, name, room_seq, created_at FROM floor_plan').get();
     const rooms = db
         .prepare(
-            'SELECT id, name, x, y, width, height, floor, outdoor FROM rooms ORDER BY sort_order',
+            'SELECT id, name, x, y, width, height, floor, outdoor, open_walls FROM rooms ORDER BY sort_order',
         )
         .all()
         .map((room) => ({
@@ -304,12 +407,13 @@ function loadState(db) {
             height: room.height,
             floor: room.floor ?? null,
             outdoor: room.outdoor === 1,
+            openWalls: parseOpenWalls(room.open_walls),
             openings: [],
         }));
 
     const openings = db
         .prepare(
-            'SELECT id, room_id, kind, wall, pos, width, hinge FROM openings ORDER BY sort_order',
+            'SELECT id, room_id, kind, wall, pos, width, hinge, swing, depth FROM openings ORDER BY sort_order',
         )
         .all();
 
@@ -323,6 +427,13 @@ function loadState(db) {
             pos: item.pos,
             width: item.width,
             hinge: item.hinge,
+            // 老库（schema 第 8 版之前）没有这一列，或者脏值，都归一到朝内开。
+            swing: item.swing === 'out' ? 'out' : 'in',
+            // 同理：第 9 版之前没有 depth，脏值一律退回默认进深。
+            depth:
+                typeof item.depth === 'number' && Number.isFinite(item.depth)
+                    ? item.depth
+                    : DEFAULT_BAY_DEPTH,
         });
         byRoom.set(item.room_id, list);
     }
@@ -504,11 +615,13 @@ function resizeRoom(db, rawId, rawRect) {
 function addOpening(db, raw) {
     if (typeof raw !== 'object' || raw === null) fail('洞口参数无效');
     const roomId = normalizeName(raw.roomId, '房间 id');
-    const room = db.prepare('SELECT width, height FROM rooms WHERE id = ?').get(roomId);
+    const room = db.prepare('SELECT width, height, open_walls FROM rooms WHERE id = ?').get(roomId);
     if (!room) fail('房间不存在');
 
     const wall = raw.wall;
     if (typeof wall !== 'string' || !WALLS.has(wall)) fail('墙面方向无效');
+    // 拆掉的边上一个墙段都没有，凿不出洞来 —— 放行会让图里多一个看不见的门窗。
+    if (openWallAt(db, roomId, wall)) fail('这条边已经拆掉了，先补回墙再放门窗');
     const kind = raw.kind;
     if (typeof kind !== 'string' || !KINDS.has(kind)) fail('洞口类型无效');
 
@@ -528,15 +641,18 @@ function addOpening(db, raw) {
     if (conflict) fail('该位置已有门窗，不能重叠');
 
     const hinge = raw.hinge === 'end' ? 'end' : 'start';
+    if (raw.swing !== undefined && !SWINGS.has(raw.swing)) fail('门扇开向无效');
+    const swing = raw.swing === 'out' ? 'out' : 'in';
+    const depth = normalizeDepth(raw.depth, '门窗');
     const order = db
         .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM openings')
         .get();
     const id = makeId('opening');
 
     db.prepare(
-        `INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(id, roomId, kind, wall, pos, width, hinge, order.next);
+        `INSERT INTO openings (id, room_id, kind, wall, pos, width, hinge, swing, depth, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, roomId, kind, wall, pos, width, hinge, swing, depth, order.next);
 
     return loadState(db);
 }
@@ -578,6 +694,25 @@ function setRoomOutdoor(db, rawId, rawOutdoor) {
 }
 
 /**
+ * 设定「哪几条边整面拆掉」。
+ *
+ * 整体替换而不是逐边增删：四个开关本来就是一份完整状态，
+ * 传进来的是这次勾选的全部结果，服务端不需要猜哪些是要反选的。
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {unknown} rawId
+ * @param {unknown} rawWalls
+ */
+function setRoomOpenWalls(db, rawId, rawWalls) {
+    const id = normalizeName(rawId, '房间 id');
+    const walls = normalizeOpenWalls(rawWalls);
+    const result = db
+        .prepare('UPDATE rooms SET open_walls = ? WHERE id = ?')
+        .run(walls.join(','), id);
+    if (result.changes === 0) fail('房间不存在');
+    return loadState(db);
+}
+
+/**
  * 修改已有门窗：位置、宽度、开启方向，只传要改的字段。
  *
  * 校验按合并后的结果做，而不是逐字段 —— 单独把宽度调大会超出墙面，
@@ -589,7 +724,9 @@ function setRoomOutdoor(db, rawId, rawOutdoor) {
 function updateOpening(db, rawId, patch) {
     const id = normalizeName(rawId, '洞口 id');
     const row = db
-        .prepare('SELECT id, room_id, wall, pos, width, hinge FROM openings WHERE id = ?')
+        .prepare(
+            'SELECT id, room_id, wall, pos, width, hinge, swing, depth FROM openings WHERE id = ?',
+        )
         .get(id);
     if (!row) fail('门窗不存在');
 
@@ -599,12 +736,15 @@ function updateOpening(db, rawId, patch) {
     const pos = patch.pos === undefined ? row.pos : Number(patch.pos);
     const width = patch.width === undefined ? row.width : Number(patch.width);
     const hinge = patch.hinge === undefined ? row.hinge : patch.hinge;
+    const swing = patch.swing === undefined ? row.swing : patch.swing;
+    const depth = normalizeDepth(patch.depth === undefined ? row.depth : patch.depth, '门窗');
 
     if (!Number.isFinite(pos) || pos < 0) fail('洞口位置无效');
     if (!Number.isFinite(width) || width < MIN_OPENING_WIDTH) {
         fail(`门窗宽度不能小于 ${MIN_OPENING_WIDTH} 像素`);
     }
     if (hinge !== 'start' && hinge !== 'end') fail('开启方向无效');
+    if (!SWINGS.has(swing)) fail('门扇开向无效');
 
     const wallLength = row.wall === 'top' || row.wall === 'bottom' ? room.width : room.height;
     if (pos + width > wallLength + 0.5) fail('洞口超出墙面长度');
@@ -615,12 +755,9 @@ function updateOpening(db, rawId, patch) {
         .some((other) => pos < other.pos + other.width - 0.5 && other.pos < pos + width - 0.5);
     if (conflict) fail('与同墙其他门窗重叠');
 
-    db.prepare('UPDATE openings SET pos = ?, width = ?, hinge = ? WHERE id = ?').run(
-        pos,
-        width,
-        hinge,
-        id,
-    );
+    db.prepare(
+        'UPDATE openings SET pos = ?, width = ?, hinge = ?, swing = ?, depth = ? WHERE id = ?',
+    ).run(pos, width, hinge, swing, depth, id);
     return loadState(db);
 }
 
@@ -804,6 +941,8 @@ function dispatchCommand(db, command) {
             return setRoomFloor(db, command.id, command.floor ?? null);
         case 'set-room-outdoor':
             return setRoomOutdoor(db, command.id, command.outdoor);
+        case 'set-room-open-walls':
+            return setRoomOpenWalls(db, command.id, command.openWalls);
         case 'add-storage':
             return addStorage(db, /** @type {Record<string, unknown>} */ (command));
         case 'rename-storage':

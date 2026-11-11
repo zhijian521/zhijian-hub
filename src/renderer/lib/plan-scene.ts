@@ -89,6 +89,10 @@ export function buildWalls(rooms: Room[]): SceneWall[] {
                     .filter((o) => o.wall === side)
                     .map((o) => ({ pos: start + o.pos, width: o.width })),
             );
+            // 整面拆掉的边：把整段当成一个大洞交出去，wallSegments 便一段墙都不产出。
+            // 拆墙不区分是谁拆的 —— 一面墙在物理上只有一个，只要一侧宣布拆掉，
+            // 这一段的墙体就不存在，隔壁那间自然连通（否则「打通」只打通一半）。
+            if (room.openWalls.includes(side)) line.holes.push({ pos: start, width: span.length });
             graph.set(key, line);
         }
     const result: SceneWall[] = [];
@@ -117,7 +121,9 @@ export function buildWalls(rooms: Room[]): SceneWall[] {
                     start +
                     segment.start -
                     (segment.start === 0 &&
-                    !line.holes.some((h) => h.pos <= start && h.pos + h.width > start)
+                    // 用闭区间：洞口刚好收在这一端时也不能往外扩墙厚，
+                    // 否则拆掉的整条墙会在洞口里留一小截伸出来的墙头。
+                    !line.holes.some((h) => h.pos <= start && h.pos + h.width >= start)
                         ? thickness / 2
                         : 0);
                 const b =
@@ -141,6 +147,57 @@ export function buildWalls(rooms: Room[]): SceneWall[] {
         }
     }
     return result;
+}
+
+/**
+ * 两条边是不是**同一面物理墙**：共线、同向，而且沿墙有重叠。
+ *
+ * 门窗的共用墙判断、拆墙的连通判断、墙面能不能凿洞，全用这一套标准，
+ * 这样「界面上说这两间房挨着」与「拆墙后真的连通」不会互相打脸。
+ */
+function samePhysicalWall(a: Room, aSide: WallSide, b: Room, bSide: WallSide): boolean {
+    if (a.id === b.id) return false;
+    const span = wallSpan(a, aSide);
+    const target = wallSpan(b, bSide);
+    const along = (target.x - span.x) * span.ux + (target.y - span.y) * span.uy;
+    const across = (target.x - span.x) * span.nx + (target.y - span.y) * span.ny;
+    return (
+        Math.abs(span.ux - target.ux) < EPSILON &&
+        Math.abs(across) < EPSILON &&
+        along < span.length - EPSILON &&
+        along + target.length > EPSILON
+    );
+}
+
+/** 贴着某条边的邻居房间（可有多个：一堵墙可能同时挨着两间）。 */
+export function sideNeighbours(rooms: Room[], room: Room, side: WallSide): Room[] {
+    return rooms.filter((other) =>
+        WALL_SIDES.some((otherSide) => samePhysicalWall(room, side, other, otherSide)),
+    );
+}
+
+/**
+ * 这面物理墙是不是已经拆掉了。
+ *
+ * 拆墙不分是谁拆的 —— 一面墙物理上只有一个，只要任意一侧宣布拆掉，这一段就没有墙了。
+ * 所以这里不能只看 `room.openWalls`：隔壁拆了墙，自己挂在这面墙上的门窗同样悬空，
+ * 画出来就成了飘在半空的门扇。
+ */
+export function wallIsOpen(rooms: Room[], room: Room, side: WallSide): boolean {
+    if (room.openWalls.includes(side)) return true;
+    return rooms.some((other) =>
+        other.openWalls.some((otherSide) => samePhysicalWall(room, side, other, otherSide)),
+    );
+}
+
+/**
+ * 这间房哪几条边贴着别的房间 —— 也就是「拆掉之后真的会连通」的那几条。
+ *
+ * 朝室外的墙拆掉只是把家开个口子，看着像图纸漏画了，那种情况应该用门或窗；
+ * 所以界面上只把能真正连通两间房的边做成可勾选项。
+ */
+export function connectableWalls(rooms: Room[], room: Room): WallSide[] {
+    return WALL_SIDES.filter((side) => sideNeighbours(rooms, room, side).length > 0);
 }
 
 /** All openings on a physical wall, including those owned by an adjacent room. */

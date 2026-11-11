@@ -10,7 +10,13 @@ import {
     windowLines,
     WALL_SIDES,
 } from '@/lib/plan-geometry';
-import { buildWalls, dimensionsOf, EXTERIOR_WALL, INTERIOR_WALL } from '@/lib/plan-scene';
+import {
+    buildWalls,
+    dimensionsOf,
+    EXTERIOR_WALL,
+    INTERIOR_WALL,
+    wallIsOpen,
+} from '@/lib/plan-scene';
 import { roomArea } from '@/stores/floor-plan';
 
 const props = withDefaults(
@@ -21,38 +27,44 @@ const walls = computed(() => buildWalls(props.rooms));
 const dimensions = computed(() => dimensionsOf(props.rooms));
 const openings = computed(() =>
     props.rooms.flatMap((room) =>
-        room.openings.map((opening) => {
-            const span = wallSpan(room, opening.wall);
-            const shared = props.rooms.some(
-                (r) =>
-                    r.id !== room.id &&
-                    WALL_SIDES.some((side) => {
-                        const other = wallSpan(r, side);
-                        const along = (other.x - span.x) * span.ux + (other.y - span.y) * span.uy;
-                        const across = (other.x - span.x) * span.nx + (other.y - span.y) * span.ny;
-                        return (
-                            span.ux === other.ux &&
-                            Math.abs(across) < 0.01 &&
-                            along < opening.pos + opening.width &&
-                            along + other.length > opening.pos
-                        );
-                    }),
-            );
-            const thickness = shared ? INTERIOR_WALL : EXTERIOR_WALL;
-            return {
-                room,
-                opening,
-                box: openingBox(room, opening, thickness),
-                door: doorGeometry(room, opening),
-                panes: windowLines(room, opening, thickness),
-                jambs: jambsOf(openingBox(room, opening, thickness), opening.wall),
-                leaf: leafBoxOf(
-                    doorGeometry(room, opening).hinge,
-                    doorGeometry(room, opening).leaf,
-                ),
-                bay: opening.kind === 'bay' ? bayGeometry(room, opening) : null,
-            };
-        }),
+        // 已经拆掉的边上传不出墙来，画在上面的门窗就成了悬空的门扇，这里一并跳过。
+        // 判断必须走 wallIsOpen：拆墙不分哪一侧，邻居拆了，自己这面墙也就没了。
+        room.openings
+            .filter((opening) => !wallIsOpen(props.rooms, room, opening.wall))
+            .map((opening) => {
+                const span = wallSpan(room, opening.wall);
+                const shared = props.rooms.some(
+                    (r) =>
+                        r.id !== room.id &&
+                        WALL_SIDES.some((side) => {
+                            const other = wallSpan(r, side);
+                            const along =
+                                (other.x - span.x) * span.ux + (other.y - span.y) * span.uy;
+                            const across =
+                                (other.x - span.x) * span.nx + (other.y - span.y) * span.ny;
+                            return (
+                                span.ux === other.ux &&
+                                Math.abs(across) < 0.01 &&
+                                along < opening.pos + opening.width &&
+                                along + other.length > opening.pos
+                            );
+                        }),
+                );
+                const thickness = shared ? INTERIOR_WALL : EXTERIOR_WALL;
+                return {
+                    room,
+                    opening,
+                    box: openingBox(room, opening, thickness),
+                    door: doorGeometry(room, opening),
+                    panes: windowLines(room, opening, thickness),
+                    jambs: jambsOf(openingBox(room, opening, thickness), opening.wall),
+                    leaf: leafBoxOf(
+                        doorGeometry(room, opening).hinge,
+                        doorGeometry(room, opening).leaf,
+                    ),
+                    bay: opening.kind === 'bay' ? bayGeometry(room, opening) : null,
+                };
+            }),
     ),
 );
 const ticks = (x: number, y: number) => `M ${x - 3} ${y + 4} l 6 -8`;

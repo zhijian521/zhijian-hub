@@ -30,6 +30,8 @@ function room(name: string, openings = 0): Room {
             pos: index * 60,
             width: 54,
             hinge: 'start' as const,
+            swing: 'in' as const,
+            depth: 26,
         })),
     };
 }

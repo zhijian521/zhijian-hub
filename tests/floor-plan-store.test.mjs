@@ -45,7 +45,16 @@ describe('atomic drawing restore', () => {
                 ...before.rooms[0],
                 name: 'changed',
                 openings: [
-                    { id: 'bad', kind: 'door', wall: 'top', pos: 200, width: 54, hinge: 'start' },
+                    {
+                        id: 'bad',
+                        kind: 'door',
+                        wall: 'top',
+                        pos: 200,
+                        width: 54,
+                        hinge: 'start',
+                        swing: 'in',
+                        depth: 26,
+                    },
                 ],
             },
         ];
@@ -762,6 +771,108 @@ describe('floor-plan-store · 门窗编辑与地面材质', () => {
         db.close();
     });
 
+    it('新门默认朝内开，可以改成外开再改回来', () => {
+        const { db, run, room } = setup();
+        const door = withDoor(run, room.id);
+        assert.equal(door.swing, 'in', '住宅常态是内开，默认值必须是 in');
+
+        const outward = run({ type: 'update-opening', id: door.id, swing: 'out' });
+        assert.equal(outward.rooms[0].openings[0].swing, 'out');
+        assert.equal(outward.rooms[0].openings[0].hinge, 'start', '改开向不能顺手改掉门轴');
+
+        const back = run({ type: 'update-opening', id: door.id, swing: 'in' });
+        assert.equal(back.rooms[0].openings[0].swing, 'in');
+        db.close();
+    });
+
+    it('拒绝非法的开向', () => {
+        const { db, run, room } = setup();
+        const door = withDoor(run, room.id);
+
+        assert.throws(
+            () => run({ type: 'update-opening', id: door.id, swing: 'sideways' }),
+            /开向/,
+        );
+        assert.throws(
+            () =>
+                run({
+                    type: 'add-opening',
+                    roomId: room.id,
+                    kind: 'door',
+                    wall: 'bottom',
+                    pos: 10,
+                    width: 54,
+                    swing: 'inside',
+                }),
+            /开向/,
+        );
+        db.close();
+    });
+
+    it('飘窗进深默认 26px，可以改，门与窗改它也不报错', () => {
+        const { db, run, room } = setup();
+        const state0 = run({
+            type: 'add-opening',
+            roomId: room.id,
+            kind: 'bay',
+            wall: 'top',
+            pos: 30,
+            width: 120,
+        });
+        const bay = state0.rooms[0].openings[0];
+        assert.equal(bay.depth, 26, '没指定就用默认出挑量');
+
+        const deeper = run({ type: 'update-opening', id: bay.id, depth: 40 });
+        assert.equal(deeper.rooms[0].openings[0].depth, 40);
+        assert.equal(deeper.rooms[0].openings[0].width, 120, '改进深不能顺手改宽度');
+        db.close();
+    });
+
+    it('进深超出 12–60px 会被拦下', () => {
+        const { db, run, room } = setup();
+        const state = run({
+            type: 'add-opening',
+            roomId: room.id,
+            kind: 'bay',
+            wall: 'top',
+            pos: 30,
+            width: 120,
+        });
+        const bay = state.rooms[0].openings[0];
+
+        assert.throws(() => run({ type: 'update-opening', id: bay.id, depth: 2 }), /进深/);
+        assert.throws(() => run({ type: 'update-opening', id: bay.id, depth: 200 }), /进深/);
+        assert.throws(
+            () =>
+                run({
+                    type: 'add-opening',
+                    roomId: room.id,
+                    kind: 'bay',
+                    wall: 'bottom',
+                    pos: 30,
+                    width: 120,
+                    depth: 'deep',
+                }),
+            /进深/,
+        );
+        db.close();
+    });
+
+    it('加门时可以直接指定外开', () => {
+        const { db, run, room } = setup();
+        const state = run({
+            type: 'add-opening',
+            roomId: room.id,
+            kind: 'door',
+            wall: 'top',
+            pos: 150,
+            width: 54,
+            swing: 'out',
+        });
+        assert.equal(state.rooms[0].openings[0].swing, 'out');
+        db.close();
+    });
+
     it('门窗不能超出墙面', () => {
         const { db, run, room } = setup();
         const door = withDoor(run, room.id);
@@ -801,6 +912,108 @@ describe('floor-plan-store · 门窗编辑与地面材质', () => {
             () => run({ type: 'update-opening', id: 'opening-missing', pos: 10 }),
             /门窗不存在/,
         );
+        db.close();
+    });
+});
+
+/*============================================================================
+  拆墙（open-walls）
+
+  存的是一份完整集合：三面墙里去掉一面，就是 ['top', 'left'] 这种形状。
+============================================================================*/
+
+describe('floor-plan-store · 拆墙', () => {
+    const wallsOf = (state) => state.rooms[0].openWalls;
+
+    it('默认四面墙都在', () => {
+        const { db, run } = createStore();
+        run({ type: 'create-plan', name: '家' });
+        const state = run({ type: 'add-room', rect: { x: 0, y: 0, width: 240, height: 180 } });
+        assert.deepEqual(wallsOf(state), []);
+        db.close();
+    });
+
+    it('按固定顺序存，重复值与乱序都归一', () => {
+        const { db, run } = createStore();
+        run({ type: 'create-plan', name: '家' });
+        const id = run({ type: 'add-room', rect: { x: 0, y: 0, width: 240, height: 180 } }).rooms[0]
+            .id;
+        assert.deepEqual(
+            wallsOf(run({ type: 'set-room-open-walls', id, openWalls: ['left', 'top', 'left'] })),
+            ['top', 'left'],
+        );
+        db.close();
+    });
+
+    it('清空数组等于四面墙都砌上', () => {
+        const { db, run } = createStore();
+        run({ type: 'create-plan', name: '家' });
+        const id = run({ type: 'add-room', rect: { x: 0, y: 0, width: 240, height: 180 } }).rooms[0]
+            .id;
+        run({ type: 'set-room-open-walls', id, openWalls: ['right'] });
+        assert.deepEqual(wallsOf(run({ type: 'set-room-open-walls', id, openWalls: [] })), []);
+        db.close();
+    });
+
+    it('拒绝非墙名与非数组', () => {
+        const { db, run } = createStore();
+        run({ type: 'create-plan', name: '家' });
+        const id = run({ type: 'add-room', rect: { x: 0, y: 0, width: 240, height: 180 } }).rooms[0]
+            .id;
+        assert.throws(
+            () => run({ type: 'set-room-open-walls', id, openWalls: ['north'] }),
+            /拆掉的墙必须是/,
+        );
+        assert.throws(
+            () => run({ type: 'set-room-open-walls', id, openWalls: 'top' }),
+            /拆掉的墙必须是数组/,
+        );
+        assert.throws(
+            () => run({ type: 'set-room-open-walls', id: 'nope', openWalls: [] }),
+            /房间不存在/,
+        );
+        db.close();
+    });
+
+    it('拆掉的边上放不了门窗：那段墙已经不存在', () => {
+        const { db, run } = createStore();
+        run({ type: 'create-plan', name: '家' });
+        const id = run({ type: 'add-room', rect: { x: 0, y: 0, width: 240, height: 180 } }).rooms[0]
+            .id;
+        // 墙在的时候放得下
+        run({ type: 'add-opening', roomId: id, kind: 'door', wall: 'top', pos: 60, width: 54 });
+        const before = run({ type: 'set-room-open-walls', id, openWalls: ['top'] });
+        // 拆掉之后同一条边再放就得拦下，否则库里会多一个看不见的洞口
+        assert.throws(
+            () =>
+                run({
+                    type: 'add-opening',
+                    roomId: id,
+                    kind: 'door',
+                    wall: 'top',
+                    pos: 150,
+                    width: 54,
+                }),
+            /这条边已经拆掉了/,
+        );
+        // 补回墙以后原来的门还在，也能继续放新的
+        const back = run({ type: 'set-room-open-walls', id, openWalls: [] });
+        assert.equal(back.rooms[0].openings.length, before.rooms[0].openings.length);
+        db.close();
+    });
+
+    it('撤销能退回上一组拆墙状态', () => {
+        const { db, run, read } = createStore();
+        run({ type: 'create-plan', name: '家' });
+        const id = run({ type: 'add-room', rect: { x: 0, y: 0, width: 240, height: 180 } }).rooms[0]
+            .id;
+        run({ type: 'set-room-open-walls', id, openWalls: ['bottom'] });
+        // 通过整体恢复回到「四面墙都在」的状态，验证 open_walls 也参与 replace-rooms。
+        const restored = run({
+            type: 'replace-rooms',
+            rooms: read().rooms.map((room) => ({ ...room, openWalls: [] })),
+        });
+        assert.deepEqual(wallsOf(restored), []);
         db.close();
     });
 });

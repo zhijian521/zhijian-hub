@@ -1,5 +1,10 @@
 import type { Room, StorageDevice, StoredItem, WallSide, OpeningKind } from '@/app/types';
 
+/* 不 import plan-geometry 的 BAY_DEPTH：这个文件被单测直接按路径加载，
+   而 plan-geometry 用的是 @/ 别名（只有 vite 认识）。一个数值不值得为它
+   在测试里加一层别名解析，这里直接用默认出挑量 26px ≈ 430 mm。 */
+const SAMPLE_BAY_DEPTH = 26;
+
 /** A connected two-bedroom reference plan, offered only on an empty drawing. */
 export function exampleRooms(): Room[] {
     const opening = (
@@ -8,7 +13,17 @@ export function exampleRooms(): Room[] {
         wall: WallSide,
         pos: number,
         width: number,
-    ) => ({ id, kind, wall, pos, width, hinge: 'start' as const });
+    ) => ({
+        id,
+        kind,
+        wall,
+        pos,
+        width,
+        hinge: 'start' as const,
+        swing: 'in' as const,
+        // 示例里的飘窗用标准出挑量，用户可以在属性卡里改。
+        depth: SAMPLE_BAY_DEPTH,
+    });
     return [
         {
             id: 'sample-master',
@@ -19,6 +34,7 @@ export function exampleRooms(): Room[] {
             height: 216,
             floor: 'wood',
             outdoor: false,
+            openWalls: [],
             openings: [
                 opening('sample-d1', 'door', 'bottom', 144, 54),
                 opening('sample-w1', 'bay', 'top', 48, 120),
@@ -33,6 +49,7 @@ export function exampleRooms(): Room[] {
             height: 156,
             floor: 'wood',
             outdoor: false,
+            openWalls: [],
             openings: [
                 opening('sample-d2', 'door', 'bottom', 108, 54),
                 opening('sample-w2', 'window', 'top', 42, 96),
@@ -47,6 +64,7 @@ export function exampleRooms(): Room[] {
             height: 216,
             floor: 'small',
             outdoor: false,
+            openWalls: [],
             openings: [
                 opening('sample-d3', 'door', 'left', 156, 54),
                 opening('sample-w3', 'window', 'top', 30, 84),
@@ -61,6 +79,7 @@ export function exampleRooms(): Room[] {
             height: 234,
             floor: 'tile',
             outdoor: false,
+            openWalls: [],
             openings: [opening('sample-d4', 'door', 'top', 270, 72)],
         },
         {
@@ -72,6 +91,7 @@ export function exampleRooms(): Room[] {
             height: 60,
             floor: 'tile',
             outdoor: false,
+            openWalls: [],
             openings: [],
         },
         {
@@ -83,6 +103,7 @@ export function exampleRooms(): Room[] {
             height: 138,
             floor: 'small',
             outdoor: false,
+            openWalls: [],
             openings: [
                 opening('sample-d5', 'door', 'left', 36, 48),
                 opening('sample-w4', 'window', 'right', 42, 54),
@@ -97,6 +118,7 @@ export function exampleRooms(): Room[] {
             height: 96,
             floor: 'tile',
             outdoor: false,
+            openWalls: [],
             openings: [
                 opening('sample-d6', 'door', 'bottom', 48, 60),
                 opening('sample-d7', 'door', 'left', 18, 60),
@@ -111,6 +133,7 @@ export function exampleRooms(): Room[] {
             height: 78,
             floor: 'small',
             outdoor: true,
+            openWalls: [],
             openings: [opening('sample-d8', 'door', 'top', 228, 72)],
         },
     ];

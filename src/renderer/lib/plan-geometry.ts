@@ -101,15 +101,18 @@ export interface Point {
 export interface DoorGeometry {
     /** 铰链点 */
     hinge: Point;
-    /** 门扇末端：从铰链垂直伸进房间 */
+    /** 门扇末端：从铰链垂直伸出（默认朝室内，out 时朝室外） */
     leaf: Point;
     /** 门开启的扫掠弧线 */
     arc: string;
 }
 
 /**
- * 门的几何：铰链落在洞口一端，门扇垂直伸进房间，扫掠弧连到洞口另一端。
- * 门一律朝室内开 —— 这是住宅的常态，也省掉了额外一个开向开关。
+ * 门的几何：铰链落在洞口一端，门扇垂直于墙伸出，扫掠弧连到洞口另一端。
+ *
+ * 往哪一侧伸由 `opening.swing` 决定：wallSpan 的 n 一律指向室内，
+ * 所以朝内开直接用 +n，朝外开把 n 取反即可（入户门、卫生间往走廊开都是这种）。
+ * 圆弧不用另算 sweep —— arcPath 按「铰链 → 门扇端点 → 洞口另一端」三点求角差。
  */
 export function doorGeometry(room: Rect, opening: Opening): DoorGeometry {
     const span = wallSpan(room, opening.wall);
@@ -121,9 +124,10 @@ export function doorGeometry(room: Rect, opening: Opening): DoorGeometry {
 
     const hinge = opening.hinge === 'end' ? end : start;
     const far = opening.hinge === 'end' ? start : end;
+    const sign = opening.swing === 'out' ? -1 : 1;
     const leaf = {
-        x: hinge.x + span.nx * opening.width,
-        y: hinge.y + span.ny * opening.width,
+        x: hinge.x + span.nx * opening.width * sign,
+        y: hinge.y + span.ny * opening.width * sign,
     };
 
     return { hinge, leaf, arc: arcPath(hinge.x, hinge.y, leaf.x, leaf.y, far.x, far.y) };
@@ -176,10 +180,24 @@ export function windowLines(room: Rect, opening: Opening, thickness: number): Li
 /*== 飘窗 ==*/
 
 /**
- * 飘窗向外凸出的进深。26px ≈ 430 mm —— 住宅飘窗的常见出挑量，
+ * 飘窗向外凸出的**默认**进深。26px ≈ 430 mm —— 住宅飘窗的常见出挑量，
  * 再浅就不像"能坐人的窗台"，再深平面图上会把相邻房间吃掉。
+ *
+ * 每个飘窗自己带一个 `opening.depth`，这里只是缺省值与上下限的来源；
+ * 落位是否还合法（会不会长进隔壁房间）由 plan-scene 的 bayFits 判断。
  */
 export const BAY_DEPTH = 26;
+
+/** 进深可调范围：200–1000 mm。低于 200 mm 画不出三线窗，高于 1 m 就是阳台了。 */
+export const BAY_DEPTH_MIN = 12;
+export const BAY_DEPTH_MAX = 60;
+
+/** 取这个飘窗的实际进深：脏值 / 老数据一律退回默认值，几何函数自己也不抛错。 */
+export function bayDepth(opening: Opening): number {
+    const value = opening.depth;
+    if (typeof value !== 'number' || !Number.isFinite(value)) return BAY_DEPTH;
+    return Math.min(BAY_DEPTH_MAX, Math.max(BAY_DEPTH_MIN, value));
+}
 
 /**
  * 飘窗玻璃带在平面上的深度：三条平行线挤在这么宽的一条带子里
@@ -231,6 +249,8 @@ export interface BayGeometry {
 const r6 = (n: number) => Math.round(n * 100) / 100;
 
 export function bayGeometry(room: Rect, opening: Opening): BayGeometry {
+    // 进深是每个飘窗自己的参数：窗台能凸出多少由用户决定，几何只负责按它算。
+    const depth = bayDepth(opening);
     const span = wallSpan(room, opening.wall);
     const start = { x: span.x + span.ux * opening.pos, y: span.y + span.uy * opening.pos };
     const end = {
@@ -241,8 +261,8 @@ export function bayGeometry(room: Rect, opening: Opening): BayGeometry {
     // nx / ny 必有一个是 0，取反会得到 -0 —— 数值上和 0 一样，但深层比较与
     // 序列化里会露出来（-0 !== 0），所以显式归零。
     const out = { x: span.nx === 0 ? 0 : -span.nx, y: span.ny === 0 ? 0 : -span.ny };
-    const farStart = { x: start.x + out.x * BAY_DEPTH, y: start.y + out.y * BAY_DEPTH };
-    const farEnd = { x: end.x + out.x * BAY_DEPTH, y: end.y + out.y * BAY_DEPTH };
+    const farStart = { x: start.x + out.x * depth, y: start.y + out.y * depth };
+    const farEnd = { x: end.x + out.x * depth, y: end.y + out.y * depth };
 
     const xs = [start.x, end.x, farStart.x, farEnd.x];
     const ys = [start.y, end.y, farStart.y, farEnd.y];
@@ -259,7 +279,7 @@ export function bayGeometry(room: Rect, opening: Opening): BayGeometry {
 
     // 玻璃带净宽：真实外墙 240 mm 在图上就是 14.4px，飘窗的玻璃带取一半左右，
     // 三条线的间距才够看清，又不会把 26px 的进深吃掉。
-    const band = Math.min(BAY_GLASS_BAND, across / 6, BAY_DEPTH / 3);
+    const band = Math.min(BAY_GLASS_BAND, across / 6, depth / 3);
     const near = 0.7; // 最外侧那条线离轮廓边留一点点，不然和外墙线粘在一起
 
     const panes: string[] = [];

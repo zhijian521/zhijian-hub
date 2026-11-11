@@ -27,6 +27,8 @@ describe('editor persistence and history', () => {
                             pos: 144,
                             width: 54,
                             hinge: 'start',
+                            swing: 'in',
+                            depth: 26,
                         },
                     ],
                 },

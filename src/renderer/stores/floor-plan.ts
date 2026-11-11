@@ -12,6 +12,7 @@ import type {
     StorageDevice,
     StorageKind,
     StoredItem,
+    SwingSide,
     WallSide,
 } from '@/app/types';
 
@@ -175,6 +176,9 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
             run({ type: 'set-room-floor', id, floor }),
         setRoomOutdoor: (id: string, outdoor: boolean) =>
             run({ type: 'set-room-outdoor', id, outdoor }),
+        /** 整面拆掉哪几条边。传的是这次勾选的全部结果，不是增量。 */
+        setRoomOpenWalls: (id: string, openWalls: WallSide[]) =>
+            run({ type: 'set-room-open-walls', id, openWalls: openWalls.slice() }),
         addOpening: (
             roomId: string,
             kind: OpeningKind,
@@ -182,8 +186,17 @@ export const useFloorPlanStore = defineStore('floor-plan', () => {
             pos: number,
             width: number,
         ) => run({ type: 'add-opening', roomId, kind, wall, pos, width }),
-        updateOpening: (id: string, patch: { pos?: number; width?: number; hinge?: HingeSide }) =>
-            run({ type: 'update-opening', id, ...patch }),
+        /** 只改几何属性；开向 / 铰链 / 飘窗进深这种开关走这里的 patch，不动位置。 */
+        updateOpening: (
+            id: string,
+            patch: {
+                pos?: number;
+                width?: number;
+                hinge?: HingeSide;
+                swing?: SwingSide;
+                depth?: number;
+            },
+        ) => run({ type: 'update-opening', id, ...patch }),
         removeOpening: (id: string) => run({ type: 'remove-opening', id }),
 
         /*== 储物设备与物品 ==*/

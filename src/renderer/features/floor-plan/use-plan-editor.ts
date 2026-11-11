@@ -1,9 +1,17 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import type { Opening, Rect, Room } from '@/app/types';
-import { hitWall, resizeRect, wallSpan, type Point, type ResizeDir } from '@/lib/plan-geometry';
+import {
+    BAY_DEPTH,
+    hitWall,
+    resizeRect,
+    wallSpan,
+    type Point,
+    type ResizeDir,
+} from '@/lib/plan-geometry';
 import {
     bayFits,
     boundsOf,
+    wallIsOpen,
     clampOpening,
     openingFits,
     overlapsRoom,
@@ -110,6 +118,9 @@ export function usePlanEditor() {
         for (const room of store.rooms) {
             const hit = hitWall(room, hover.value.x, hover.value.y, 16 / zoom.value);
             if (!hit) continue;
+            // 拆掉的边上一段墙都没有，没地方凿门窗；不拦的话会存下一个看不见的洞口，
+            // 哪天把墙补回来它就自己冒出来。拆墙不分是哪一侧拆的，所以用 wallIsOpen。
+            if (wallIsOpen(store.rooms, room, hit.wall)) continue;
             const span = wallSpan(room, hit.wall);
             const distance = Math.abs(
                 (hover.value.x - span.x) * span.nx + (hover.value.y - span.y) * span.ny,
@@ -141,6 +152,8 @@ export function usePlanEditor() {
             pos,
             width,
             hinge: 'start',
+            swing: 'in',
+            depth: BAY_DEPTH,
         };
         // 飘窗要凸到屋外：落在隔墙上时窗台会插进邻居家，这里直接判掉。
         return {

@@ -17,9 +17,12 @@
 ============================================================================*/
 
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import type { FloorMaterial, Opening, Room, StorageKind, StoredItem } from '@/app/types';
+import type { FloorMaterial, Opening, Room, StorageKind, StoredItem, WallSide } from '@/app/types';
 import FloatCard from '@/components/float-card.vue';
 import {
+    BAY_DEPTH_MAX,
+    BAY_DEPTH_MIN,
+    bayDepth,
     bayGeometry,
     doorGeometry,
     openingBox,
@@ -30,10 +33,14 @@ import {
     type ResizeDir,
 } from '@/lib/plan-geometry';
 import {
+    bayFits,
     boundsOf,
     clampOpening,
+    connectableWalls,
     EXTERIOR_WALL,
     MILLIMETERS_PER_PIXEL,
+    sideNeighbours,
+    wallIsOpen,
     wallOpenings,
 } from '@/lib/plan-scene';
 import { searchPlan, type SearchHit } from '@/lib/plan-search';
@@ -142,6 +149,8 @@ const width = ref(0);
 const height = ref(0);
 const openingWidth = ref(900);
 const openingPosition = ref(0);
+/* 飘窗进深单独一个输入框：只有飘窗有这个参数，窗与门没有窗台可凸。 */
+const openingDepth = ref(26 * MILLIMETERS_PER_PIXEL);
 const exportRef = ref<SVGSVGElement | null>(null);
 const exporting = ref(false);
 
@@ -238,6 +247,33 @@ const roomStorage = computed(() =>
 );
 const roomItems = computed(() => (selectedRoom.value ? itemsOfRoom(selectedRoom.value.id) : []));
 
+/** 能拆的边：只列真的贴着别的房间的墙。朝室外的墙拆了不叫连通，叫漏风。
+    已经拆掉、但邻居后来被删掉的边也要留在列表里 —— 否则那条边再也补不回去。 */
+const openWallOptions = computed(() => {
+    const room = selectedRoom.value;
+    if (!room) return [];
+    const sides = [...new Set([...connectableWalls(store.rooms, room), ...room.openWalls])];
+    return sides.map((side) => {
+        const names = sideNeighbours(store.rooms, room, side).map((other) => other.name);
+        return {
+            side,
+            label: wallNames[side],
+            neighbours: names.length ? `与${names.join('、')}之间` : '原本的邻居已经删掉',
+            open: room.openWalls.includes(side),
+        };
+    });
+});
+
+/** 传出去的是勾选后的完整集合，不是开关的增量。 */
+function toggleOpenWall(side: WallSide) {
+    const room = selectedRoom.value;
+    if (!room || store.busy) return;
+    const next = room.openWalls.includes(side)
+        ? room.openWalls.filter((wall) => wall !== side)
+        : [...room.openWalls, side];
+    void store.setRoomOpenWalls(room.id, next);
+}
+
 /*== 左侧清单：点「房间 / 家具 / 储物」时右侧列什么 ========================*/
 interface PlaceEntry {
     kind: 'room' | 'storage';
@@ -253,7 +289,13 @@ const listEntries = computed<PlaceEntry[]>(() => {
             kind: 'room' as const,
             id: room.id,
             title: room.name,
-            detail: `${roomArea(room).toFixed(1)} m² · ${room.openings.length} 处门窗`,
+            detail: [
+                `${roomArea(room).toFixed(1)} m²`,
+                `${room.openings.length} 处门窗`,
+                room.openWalls.length ? `打通 ${room.openWalls.length} 面` : '',
+            ]
+                .filter(Boolean)
+                .join(' · '),
             icon: 'room',
             count: itemsOfRoom(room.id).length,
         }));
@@ -572,6 +614,7 @@ watch(
     (o) => {
         openingWidth.value = o ? mm(o.width) : 900;
         openingPosition.value = o ? mm(o.pos) : 0;
+        openingDepth.value = o ? mm(bayDepth(o)) : 26 * MILLIMETERS_PER_PIXEL;
     },
     { immediate: true },
 );
@@ -628,7 +671,47 @@ async function updateOpening(field: 'width' | 'pos') {
     if (current) {
         openingWidth.value = mm(current.width);
         openingPosition.value = mm(current.pos);
+        openingDepth.value = mm(bayDepth(current));
     }
+}
+
+/* 飘窗进深：200–1000 mm，改成别的形状都不用重算位置，只影响外凸多远。
+   超范围的直接拦掉并说明，不然飘窗会长进隔壁房间的墙里。 */
+async function updateBayDepth() {
+    const opening = selectedOpening.value;
+    if (!opening) return;
+    const value = Number(openingDepth.value);
+    if (
+        !Number.isFinite(value) ||
+        value < BAY_DEPTH_MIN * MILLIMETERS_PER_PIXEL ||
+        value > BAY_DEPTH_MAX * MILLIMETERS_PER_PIXEL
+    ) {
+        message.value = `进深要在 ${Math.round(BAY_DEPTH_MIN * MILLIMETERS_PER_PIXEL)}–${Math.round(BAY_DEPTH_MAX * MILLIMETERS_PER_PIXEL)} mm 之间`;
+    } else {
+        const room = store.selectedRoom;
+        const depthPx = value / MILLIMETERS_PER_PIXEL;
+        // 用新进深试算一次几何，凸出的窗台不能压到隔壁房间。
+        if (room && !bayFits(store.rooms, room, { ...opening, depth: depthPx })) {
+            message.value = '这个进深会伸进隔壁房间，换个位置或把进深调小一些。';
+        } else {
+            message.value = '';
+            await store.updateOpening(opening.id, { depth: depthPx });
+        }
+    }
+    const current = selectedOpening.value;
+    if (current) openingDepth.value = mm(bayDepth(current));
+}
+/** 门窗清单的第二行：墙面 · 宽度；门补开向，飘窗补进深。
+    墙被拆掉时这扇门只是「藏起来了」，还留在数据里，得在清单里说明，不然看着像丢了。 */
+function openingDetail(opening: Opening, room: Room) {
+    const base = `${wallNames[opening.wall]} · ${mm(opening.width)} mm`;
+    const extra =
+        opening.kind === 'door'
+            ? ` · ${opening.swing === 'out' ? '外开' : '内开'}`
+            : opening.kind === 'bay'
+              ? ` · 进深 ${mm(bayDepth(opening))} mm`
+              : '';
+    return wallIsOpen(store.rooms, room, opening.wall) ? `${base}${extra} · 墙已拆` : base + extra;
 }
 function selectOpening(room: Room, opening: Opening) {
     store.select(room.id);
@@ -1285,19 +1368,69 @@ async function exportSvg() {
                             @change="updateOpening('pos')"
                         />
                     </label>
-                    <button
-                        v-if="selectedOpening.kind === 'door'"
-                        class="button full-width"
-                        :disabled="store.busy"
-                        @click="
-                            store.updateOpening(selectedOpening.id, {
-                                hinge: selectedOpening.hinge === 'start' ? 'end' : 'start',
-                            })
-                        "
-                    >
-                        切换门扇铰链方向
-                    </button>
-                    <p class="field-help">门扇朝所属房间内开启。拖动图上的门窗，可沿墙调整位置。</p>
+                    <label v-if="selectedOpening.kind === 'bay'" class="field-label">
+                        向外出挑
+                        <span>mm</span>
+                        <input
+                            v-model="openingDepth"
+                            aria-label="飘窗进深"
+                            type="number"
+                            :min="Math.round(BAY_DEPTH_MIN * MILLIMETERS_PER_PIXEL)"
+                            :max="Math.round(BAY_DEPTH_MAX * MILLIMETERS_PER_PIXEL)"
+                            step="50"
+                            :disabled="store.busy"
+                            @change="updateBayDepth"
+                        />
+                    </label>
+                    <p v-if="selectedOpening.kind === 'bay'" class="field-help">
+                        出挑越深窗台越宽；凸出的窗台不能伸进隔壁房间，放不下时会拦下并提示。
+                    </p>
+                    <p v-else class="field-help">拖动图上的门窗，可沿墙调整位置。</p>
+                </div>
+                <!-- 门扇往哪边开、门轴在哪一端：两个独立开关，合起来才是门扇的真实姿态。
+                     做成两组胶囊而不是一个「切换」按钮 —— 按钮只能表达"翻一下"，
+                     看不出当前到底是哪种状态，也没法从外开直接点回内开。 -->
+                <div v-if="selectedOpening.kind === 'door'" class="property-section">
+                    <h4>开启方式</h4>
+                    <div class="chip-row">
+                        <button
+                            :class="{ chosen: selectedOpening.swing === 'in' }"
+                            :aria-pressed="selectedOpening.swing === 'in'"
+                            :disabled="store.busy"
+                            @click="store.updateOpening(selectedOpening.id, { swing: 'in' })"
+                        >
+                            内开
+                        </button>
+                        <button
+                            :class="{ chosen: selectedOpening.swing === 'out' }"
+                            :aria-pressed="selectedOpening.swing === 'out'"
+                            :disabled="store.busy"
+                            @click="store.updateOpening(selectedOpening.id, { swing: 'out' })"
+                        >
+                            外开
+                        </button>
+                    </div>
+                    <div class="chip-row">
+                        <button
+                            :class="{ chosen: selectedOpening.hinge === 'start' }"
+                            :aria-pressed="selectedOpening.hinge === 'start'"
+                            :disabled="store.busy"
+                            @click="store.updateOpening(selectedOpening.id, { hinge: 'start' })"
+                        >
+                            门轴在起点
+                        </button>
+                        <button
+                            :class="{ chosen: selectedOpening.hinge === 'end' }"
+                            :aria-pressed="selectedOpening.hinge === 'end'"
+                            :disabled="store.busy"
+                            @click="store.updateOpening(selectedOpening.id, { hinge: 'end' })"
+                        >
+                            门轴在终点
+                        </button>
+                    </div>
+                    <p class="field-help">
+                        内开朝房间里面开（住宅常态），外开朝房间外面开（入户门、储藏间往走廊开）。
+                    </p>
                 </div>
                 <div class="property-section">
                     <button class="text-button" @click="selectedOpeningId = null">
@@ -1436,6 +1569,32 @@ async function exportSvg() {
                         </span>
                     </label>
                 </div>
+                <!-- 打通：把某一侧的墙整面拆掉，两间房的地面直接接上。
+                     只列出真正贴着邻居的边 —— 朝室外的墙拆了不叫连通，叫漏风。 -->
+                <div v-if="mode === 'edit'" class="property-section">
+                    <h4>打通</h4>
+                    <div v-if="openWallOptions.length" class="open-wall-list">
+                        <button
+                            v-for="option in openWallOptions"
+                            :key="option.side"
+                            class="open-wall-row"
+                            :class="{ active: option.open }"
+                            :disabled="store.busy"
+                            :aria-pressed="option.open"
+                            @click="toggleOpenWall(option.side)"
+                        >
+                            <span class="open-wall-name">{{ option.label }}</span>
+                            <small>{{ option.neighbours }}</small>
+                            <span class="open-wall-mark">
+                                {{ option.open ? '已打通' : '有墙' }}
+                            </span>
+                        </button>
+                    </div>
+                    <p v-else class="field-help">四周没有贴着的房间，没墙可拆。</p>
+                    <p class="field-help">
+                        拆掉的边不再砌墙，两侧地面直接连通；这条边上的门窗先藏起来，补回墙就回来。
+                    </p>
+                </div>
                 <div v-if="mode === 'edit'" class="property-section">
                     <h4>地面材质</h4>
                     <div class="material-options">
@@ -1472,9 +1631,7 @@ async function exportSvg() {
                             <PlanIcon :name="opening.kind" />
                             <span class="item-main">
                                 {{ openingLabel(opening.kind) }}
-                                <small>
-                                    {{ wallNames[opening.wall] }} · {{ mm(opening.width) }} mm
-                                </small>
+                                <small>{{ openingDetail(opening, selectedRoom) }}</small>
                             </span>
                             <PlanIcon name="chevron" />
                         </button>

@@ -33,8 +33,14 @@ export type WallSide = 'top' | 'right' | 'bottom' | 'left';
 /** 洞口类型。door 平开门、window 标准窗、bay 飘窗（外凸出一块带三面玻璃的平台）。 */
 export type OpeningKind = 'door' | 'window' | 'bay';
 
-/** 门的铰链在哪一端，决定门扇朝哪边开。 */
+/** 门的铰链在哪一端。它和开向一起决定门扇站在哪个角、往哪边扫。 */
 export type HingeSide = 'start' | 'end';
+
+/**
+ * 门扇朝哪一侧开，相对于门所属的房间。
+ * in 朝房间里面开（住宅常态），out 朝房间外面开（入户门、储藏间、卫生间往走廊开）。
+ */
+export type SwingSide = 'in' | 'out';
 
 /**
  * 地面材质。`wood` / `tile` / `small` 可由房间名自动推断，
@@ -63,6 +69,10 @@ export interface Opening {
     pos: number;
     width: number;
     hinge: HingeSide;
+    /*-- 只有门用得上；窗与飘窗一律存 'in'，免得同一列在两处各有一套空值语义 --*/
+    swing: SwingSide;
+    /*-- 只有飘窗用得上：向外凸出的进深（px）。门与窗存默认值，不参与几何 --*/
+    depth: number;
 }
 
 export interface Room extends Rect {
@@ -76,6 +86,14 @@ export interface Room extends Rect {
      * 于是同一块矩形既能当室内房间，也能当阳台，不需要另立一套几何。
      */
     outdoor: boolean;
+    /**
+     * 整面拆掉、不做墙的边。用在「餐厅与客厅打通」「卧室与衣帽间连通」这类情况：
+     * 这一边不再砌墙，两间房的地面直接接在一起。
+     *
+     * 为什么不复用 Opening：门窗是墙上开一个洞，洞两侧还得留墙垛；
+     * 拆墙是整条边一个洞都不剩，连墙垛和墙厚都没有，几何上完全不同。
+     */
+    openWalls: WallSide[];
     openings: Opening[];
 }
 
@@ -142,11 +160,22 @@ export type FloorPlanCommand =
           pos: number;
           width: number;
           hinge?: HingeSide;
+          swing?: SwingSide;
+          depth?: number;
       }
-    | { type: 'update-opening'; id: string; pos?: number; width?: number; hinge?: HingeSide }
+    | {
+          type: 'update-opening';
+          id: string;
+          pos?: number;
+          width?: number;
+          hinge?: HingeSide;
+          swing?: SwingSide;
+          depth?: number;
+      }
     | { type: 'remove-opening'; id: string }
     | { type: 'set-room-floor'; id: string; floor: FloorMaterial | null }
     | { type: 'set-room-outdoor'; id: string; outdoor: boolean }
+    | { type: 'set-room-open-walls'; id: string; openWalls: WallSide[] }
     | { type: 'add-storage'; roomId: string; name: string; kind: StorageKind }
     | { type: 'rename-storage'; id: string; name: string }
     | { type: 'remove-storage'; id: string }

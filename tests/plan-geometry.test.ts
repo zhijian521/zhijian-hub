@@ -4,6 +4,8 @@ import { describe, it } from 'node:test';
 import {
     arcPath,
     BAY_DEPTH,
+    BAY_DEPTH_MAX,
+    BAY_DEPTH_MIN,
     bayGeometry,
     doorGeometry,
     floorMaterial,
@@ -36,6 +38,8 @@ function opening(patch: Partial<Opening>): Opening {
         pos: 100,
         width: 54,
         hinge: 'start',
+        swing: 'in',
+        depth: BAY_DEPTH,
         ...patch,
     };
 }
@@ -131,6 +135,35 @@ describe('doorGeometry', () => {
         const door = doorGeometry(ROOM, opening({ wall: 'top', hinge: 'end' }));
         assert.deepEqual(door.hinge, { x: 254, y: 100 }, '铰链在洞口终点');
         assert.deepEqual(door.leaf, { x: 254, y: 154 });
+    });
+
+    it('外开时门扇伸到墙外侧，扫掠弧跟着翻过去', () => {
+        const top = doorGeometry(ROOM, opening({ wall: 'top', swing: 'out' }));
+        assert.deepEqual(top.hinge, { x: 200, y: 100 }, '铰链位置不受开向影响');
+        assert.deepEqual(top.leaf, { x: 200, y: 46 }, '顶墙外开朝上，伸到墙外');
+
+        // 门扇端点落在 y=46，扫掠弧必须从那里起笔，否则门扇和弧脱节。
+        assert.match(top.arc, /^M 200 46 A 54 54 0 0 /);
+
+        const right = doorGeometry(ROOM, opening({ wall: 'right', swing: 'out' }));
+        assert.deepEqual(right.leaf, { x: 454, y: 200 }, '右墙外开朝右');
+    });
+
+    it('开向与铰链互不干扰：四种组合的键都在洞口两端之间', () => {
+        for (const hinge of ['start', 'end'] as const) {
+            for (const swing of ['in', 'out'] as const) {
+                const door = doorGeometry(ROOM, opening({ wall: 'top', hinge, swing }));
+                assert.ok(
+                    door.hinge.x === 200 || door.hinge.x === 254,
+                    `${hinge}/${swing} 的铰链必须落在洞口端点`,
+                );
+                assert.equal(
+                    door.leaf.y,
+                    swing === 'out' ? 46 : 154,
+                    `${hinge}/${swing} 的门扇方向只由开向决定`,
+                );
+            }
+        }
     });
 });
 
@@ -254,6 +287,7 @@ describe('resolveFloor', () => {
         height: 200,
         floor: null,
         outdoor: false,
+        openWalls: [],
         openings: [],
     };
 
@@ -322,6 +356,53 @@ describe('bayGeometry', () => {
             x2: 100 - BAY_DEPTH,
             y2: 210,
         });
+    });
+});
+
+describe('bayGeometry · 可调进深', () => {
+    it('进深改小时窗台跟着变浅，改大时变深', () => {
+        const shallow = bayGeometry(
+            ROOM,
+            opening({ wall: 'top', pos: 100, width: 120, depth: 16 }),
+        );
+        const deep = bayGeometry(ROOM, opening({ wall: 'top', pos: 100, width: 120, depth: 40 }));
+        assert.equal(shallow.box.height, 16, '浅出挑的凸出高度就是进深');
+        assert.equal(deep.box.height, 40);
+        assert.equal(shallow.box.y, 100 - 16, '仍然贴着墙中线往外长');
+        assert.equal(deep.box.y, 100 - 40);
+    });
+
+    it('每一种进深都保持三条同心窗线与一条窗台虚线', () => {
+        for (const depth of [BAY_DEPTH_MIN, 26, BAY_DEPTH_MAX]) {
+            const bay = bayGeometry(ROOM, opening({ wall: 'top', pos: 100, width: 120, depth }));
+            assert.equal(bay.panes.length, 3, `进深 ${depth} 仍是三线窗`);
+            assert.ok(bay.sill.width > 0);
+            assert.ok(bay.sill.height > 0);
+            // 三条线必须互不重叠：偏移量递增，进深再小也不能挤成一条。
+            // 取每条 U 形折线的第二个顶点（正面那条横边的 y）作比较。
+            const fronts = bay.panes.map((d) => {
+                const coords = d.replace(/[ML]/g, ' ').trim().split(/\s+/).map(Number);
+                return coords[3];
+            });
+            assert.deepEqual(
+                [...fronts].sort((a, b) => a - b),
+                fronts,
+                '三条线从外到内依次排开',
+            );
+            assert.equal(new Set(fronts).size, 3, `进深 ${depth} 的三条线不能重合`);
+        }
+    });
+
+    it('脏值与缺省值都退回默认进深，几何不抛错', () => {
+        const missing = bayGeometry(
+            ROOM,
+            opening({ wall: 'top', pos: 100, width: 120, depth: undefined }),
+        );
+        assert.equal(missing.box.height, BAY_DEPTH, '缺省用默认出挑量');
+        const tiny = bayGeometry(ROOM, opening({ wall: 'top', pos: 100, width: 120, depth: 1 }));
+        assert.equal(tiny.box.height, BAY_DEPTH_MIN, '过小夹到下限，避免窗线挤成一团');
+        const huge = bayGeometry(ROOM, opening({ wall: 'top', pos: 100, width: 120, depth: 500 }));
+        assert.equal(huge.box.height, BAY_DEPTH_MAX, '过大的夹到上限');
     });
 });
 

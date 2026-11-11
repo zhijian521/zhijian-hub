@@ -5,13 +5,13 @@
   原生模块要按 Electron ABI 重新编译，多一套 MSVC 工具链依赖，收益为零。
 
   schema 版本记在 `PRAGMA user_version`，迁移按版本递进。
-  当前版本 6：房间（含户外标记）、洞口（门/窗/飘窗）、储物设备与物品。
+  当前版本 7：房间（含户外标记、可拆掉的边墙）、洞口（门/窗/飘窗）、储物设备与物品。
 ============================================================================*/
 
 const { DatabaseSync } = require('node:sqlite');
 
 /** 当前 schema 版本。新增表或列时 +1，并在 MIGRATIONS 里补一段。 */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 9;
 
 /**
  * 版本 1：户型图与房间。
@@ -154,6 +154,33 @@ CREATE INDEX IF NOT EXISTS idx_openings_room ON openings(room_id);
 `;
 
 /**
+ * 版本 7：可以整面拆掉的边墙。
+ *
+ * 值是一串用逗号分隔的墙名（`top,left`），空串表示四面墙都在。
+ * 存成文本而不是四列布尔，是因为「拆掉的边」天然是个集合，
+ * 以后要支持斜墙之类的非固定朝向也不用再改表结构。
+ */
+const SCHEMA_V7 = `ALTER TABLE rooms ADD COLUMN open_walls TEXT NOT NULL DEFAULT '';`;
+
+/**
+ * 版本 8：门的内开 / 外开。
+ *
+ * 加一列就够了 —— 这一列只是在 hinge 之外多一个符号，不改洞口的任何几何。
+ * 用 ADD COLUMN 而不是重建表，因为换表是为了改 CHECK 约束里的枚举（版本 6 那次），
+ * 而这里的 CHECK 是随着新列一起新建的，天然就带上。旧图升上来一律默认朝内开。
+ */
+const SCHEMA_V8 = `ALTER TABLE openings ADD COLUMN swing TEXT NOT NULL DEFAULT 'in' CHECK (swing IN ('in', 'out'));`;
+
+/**
+ * 版本 9：飘窗的外凸进深。
+ *
+ * 存的是像素（和 pos / width 同一套单位），默认 26px ≈ 430 mm —— 住宅飘窗的
+ * 常见出挑量。门与窗也用得到这一列，但只是默认值，几何上不读它。
+ * 仍然用 ADD COLUMN：改的是「多一个数值」而不是改枚举，不需要重建成新表。
+ */
+const SCHEMA_V9 = `ALTER TABLE openings ADD COLUMN depth REAL NOT NULL DEFAULT 26;`;
+
+/**
  * 迁移脚本按版本号顺序执行：`MIGRATIONS[n]` 把库从版本 n 升到 n + 1。
  * 只向前迁移，不写回退逻辑（回退靠备份文件）。
  * @type {Array<(db: import('node:sqlite').DatabaseSync) => void>}
@@ -165,6 +192,9 @@ const MIGRATIONS = [
     (db) => db.exec(SCHEMA_V4),
     (db) => db.exec(SCHEMA_V5),
     (db) => db.exec(SCHEMA_V6),
+    (db) => db.exec(SCHEMA_V7),
+    (db) => db.exec(SCHEMA_V8),
+    (db) => db.exec(SCHEMA_V9),
 ];
 
 /**
