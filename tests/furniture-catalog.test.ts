@@ -203,7 +203,7 @@ describe('furniture-catalog · 平面画法', () => {
 
 describe('furniture-catalog · 分组与画法层次', () => {
     it('原型够多，并且五组都有人', () => {
-        assert.ok(FURNITURE_PRESETS.length >= 28, '常见家具至少要有近三十件');
+        assert.ok(FURNITURE_PRESETS.length >= 40, '常见家具至少要有四十件');
         for (const group of FURNITURE_GROUPS) {
             assert.ok(
                 FURNITURE_PRESETS.some((preset) => preset.group === group.id),
@@ -250,6 +250,69 @@ describe('furniture-catalog · 分组与画法层次', () => {
                 assert.ok((shape.cy ?? 0) + (shape.ry ?? 0) <= size + 0.01);
             }
         }
+    });
+});
+
+describe('furniture-catalog · 新款常客家具', () => {
+    it('L 型转角沙发在库里，尺寸按真实贵妃位折算', () => {
+        const sofa = presetOf('sofa-l');
+        assert.ok(sofa, '家具库缺少 L 型转角沙发');
+        assert.equal(sofa!.detail, 'sofa-l');
+        // 2700 × 1800 mm 的转角沙发是卖场里最常见的那一档。
+        assert.deepEqual([sofa!.width, sofa!.height], [162, 108]);
+        // 贵妃位让它在平面上是个 L，不是一块矩形。
+        const drawing = furnitureDrawing({ preset: 'sofa-l', width: 162, height: 108 });
+        const bodies = drawing.shapes.filter(
+            (shape) => shape.kind === 'rect' && shape.width === 162 && shape.height === 108,
+        );
+        assert.equal(bodies.length, 0, 'L 型沙发不该铺一块整宽整深的底板');
+        // 凹口（右下角那块地板）必须是空的：长边只占上半、贵妃位只在右下。
+        const covered = (x: number, y: number) =>
+            drawing.shapes.some(
+                (shape) =>
+                    shape.kind === 'rect' &&
+                    (shape.fill ?? 'none') !== 'none' &&
+                    x >= (shape.x ?? 0) &&
+                    x <= (shape.x ?? 0) + (shape.width ?? 0) &&
+                    y >= (shape.y ?? 0) &&
+                    y <= (shape.y ?? 0) + (shape.height ?? 0),
+            );
+        assert.equal(covered(20, 90), false, 'L 的凹口被填实了');
+        assert.equal(covered(20, 20), true, '长边没画出来');
+        assert.equal(covered(130, 90), true, '贵妃位没画出来');
+    });
+
+    it('贵妃榻、双人沙发、床尾凳、梳妆台这些常客都在', () => {
+        for (const [id, name] of [
+            ['chaise', '贵妃榻'],
+            ['sofa-love', '双人沙发'],
+            ['bed-bench', '床尾凳'],
+            ['vanity', '梳妆台'],
+            ['floor-mirror', '穿衣镜'],
+            ['sideboard', '餐边柜'],
+            ['island', '中岛台'],
+            ['bar-stool', '吧台椅'],
+            ['shoe-bench', '换鞋凳'],
+            ['gaming-chair', '电竞椅'],
+            ['robot-vacuum', '扫地机器人'],
+            ['purifier', '空气净化器'],
+        ] as [string, string][]) {
+            assert.equal(presetOf(id)?.name, name, '缺少「' + name + '」');
+        }
+    });
+
+    it('新款画法各自成立：L 沙发与贵妃榻有靠背，镜子是浅色镜面', () => {
+        for (const id of ['sofa-l', 'chaise']) {
+            assert.equal(hasBack(id), true, id + ' 有靠背，该跟着墙转');
+        }
+        for (const id of ['bed-bench', 'vanity', 'floor-mirror', 'island', 'bar-stool']) {
+            assert.equal(hasBack(id), false, id + ' 摆哪面都行');
+        }
+        const mirror = furnitureDrawing({ preset: 'floor-mirror', width: 48, height: 21 });
+        assert.ok(
+            mirror.shapes.some((shape) => shape.fill === TONES.metal.light),
+            '穿衣镜没有镜面那一层',
+        );
     });
 });
 

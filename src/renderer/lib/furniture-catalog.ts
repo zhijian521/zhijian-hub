@@ -37,6 +37,8 @@ export type FurnitureTone =
 export type FurnitureDetail =
     | 'bed'
     | 'sofa'
+    | 'sofa-l'
+    | 'chaise'
     | 'cabinet'
     | 'shelf'
     | 'appliance'
@@ -48,7 +50,10 @@ export type FurnitureDetail =
     | 'sanitary'
     | 'counter'
     | 'tv'
-    | 'lamp';
+    | 'lamp'
+    | 'dressing'
+    | 'mirror'
+    | 'bench';
 
 /** 家具库的分组：按房间顺序排，找不到家具时也照样有组名。 */
 export type FurnitureGroup = 'bedroom' | 'living' | 'kitchen' | 'bath' | 'decor';
@@ -190,6 +195,39 @@ export const FURNITURE_PRESETS: FurniturePreset[] = [
         hint: '400 × 400 mm，餐桌或书桌旁',
     },
     {
+        id: 'bed-bench',
+        name: '床尾凳',
+        kind: 'furniture',
+        group: 'bedroom',
+        width: 72,
+        height: 24,
+        tone: 'wood',
+        detail: 'bench',
+        hint: '1200 × 400 mm，床尾放换洗衣物',
+    },
+    {
+        id: 'vanity',
+        name: '梳妆台',
+        kind: 'cabinet',
+        group: 'bedroom',
+        width: 60,
+        height: 27,
+        tone: 'wood',
+        detail: 'dressing',
+        hint: '1000 × 450 mm，贴墙放，镜面朝外',
+    },
+    {
+        id: 'floor-mirror',
+        name: '穿衣镜',
+        kind: 'furniture',
+        group: 'bedroom',
+        width: 48,
+        height: 21,
+        tone: 'metal',
+        detail: 'mirror',
+        hint: '800 × 350 mm，靠墙立着，留出转身空间',
+    },
+    {
         id: 'sofa',
         name: '三人沙发',
         kind: 'furniture',
@@ -199,6 +237,39 @@ export const FURNITURE_PRESETS: FurniturePreset[] = [
         tone: 'fabric',
         detail: 'sofa',
         hint: '2000 × 900 mm，客厅主位',
+    },
+    {
+        id: 'sofa-l',
+        name: 'L 型转角沙发',
+        kind: 'furniture',
+        group: 'living',
+        width: 162,
+        height: 108,
+        tone: 'fabric',
+        detail: 'sofa-l',
+        hint: '2700 × 1800 mm，贵妃位在右，靠客厅一角',
+    },
+    {
+        id: 'sofa-love',
+        name: '双人沙发',
+        kind: 'furniture',
+        group: 'living',
+        width: 90,
+        height: 54,
+        tone: 'fabric',
+        detail: 'sofa',
+        hint: '1500 × 900 mm，小客厅或书房',
+    },
+    {
+        id: 'chaise',
+        name: '贵妃榻',
+        kind: 'furniture',
+        group: 'living',
+        width: 96,
+        height: 48,
+        tone: 'fabric',
+        detail: 'chaise',
+        hint: '1600 × 800 mm，窗边斜躺',
     },
     {
         id: 'armchair',
@@ -267,6 +338,17 @@ export const FURNITURE_PRESETS: FurniturePreset[] = [
         hint: '900 × 350 mm，书与资料',
     },
     {
+        id: 'gaming-chair',
+        name: '电竞椅',
+        kind: 'furniture',
+        group: 'living',
+        width: 42,
+        height: 42,
+        tone: 'fabric',
+        detail: 'chair',
+        hint: '700 × 700 mm，书桌或电脑桌前',
+    },
+    {
         id: 'rug',
         name: '地毯',
         kind: 'furniture',
@@ -298,6 +380,39 @@ export const FURNITURE_PRESETS: FurniturePreset[] = [
         tone: 'metal',
         detail: 'counter',
         hint: '2000 × 600 mm，水槽与灶台',
+    },
+    {
+        id: 'sideboard',
+        name: '餐边柜',
+        kind: 'cabinet',
+        group: 'kitchen',
+        width: 72,
+        height: 24,
+        tone: 'wood',
+        detail: 'cabinet',
+        hint: '1200 × 400 mm，餐桌旁的杯盘与酒水',
+    },
+    {
+        id: 'island',
+        name: '中岛台',
+        kind: 'furniture',
+        group: 'kitchen',
+        width: 96,
+        height: 54,
+        tone: 'metal',
+        detail: 'counter',
+        hint: '1600 × 900 mm，开放式厨房的操作与备餐中心',
+    },
+    {
+        id: 'bar-stool',
+        name: '吧台椅',
+        kind: 'furniture',
+        group: 'kitchen',
+        width: 24,
+        height: 24,
+        tone: 'walnut',
+        detail: 'chair',
+        hint: '400 × 400 mm，贴岛台或吧台摆',
     },
     {
         id: 'fridge',
@@ -366,6 +481,17 @@ export const FURNITURE_PRESETS: FurniturePreset[] = [
         hint: '1000 × 350 mm，玄关进门处',
     },
     {
+        id: 'shoe-bench',
+        name: '换鞋凳',
+        kind: 'furniture',
+        group: 'kitchen',
+        width: 60,
+        height: 21,
+        tone: 'wood',
+        detail: 'bench',
+        hint: '1000 × 350 mm，玄关柜对面，坐着换鞋',
+    },
+    {
         id: 'toilet',
         name: '马桶',
         kind: 'furniture',
@@ -430,6 +556,28 @@ export const FURNITURE_PRESETS: FurniturePreset[] = [
         tone: 'metal',
         detail: 'lamp',
         hint: '300 × 300 mm，沙发或床边',
+    },
+    {
+        id: 'robot-vacuum',
+        name: '扫地机器人',
+        kind: 'furniture',
+        group: 'decor',
+        width: 24,
+        height: 24,
+        tone: 'cool',
+        detail: 'drum',
+        hint: '400 × 400 mm，靠墙留出回充位置',
+    },
+    {
+        id: 'purifier',
+        name: '空气净化器',
+        kind: 'furniture',
+        group: 'decor',
+        width: 21,
+        height: 21,
+        tone: 'metal',
+        detail: 'appliance',
+        hint: '350 × 350 mm，墙角或沙发边',
     },
     {
         id: 'storage-box',
@@ -512,6 +660,8 @@ export function hasBack(presetId: string | null | undefined): boolean {
     return (
         preset.detail === 'bed' ||
         preset.detail === 'sofa' ||
+        preset.detail === 'sofa-l' ||
+        preset.detail === 'chaise' ||
         preset.detail === 'cabinet' ||
         preset.detail === 'shelf' ||
         preset.detail === 'appliance' ||
@@ -619,28 +769,34 @@ export function furnitureDrawing(box: FurnitureBox): FurnitureDrawing {
         extra: Partial<FurnitureShape> = {},
     ) => shapes.push({ kind: 'ellipse', cx, cy, rx, ry, ...extra });
 
-    // 本体。
-    rect(0, 0, w, h, { rx: radius, fill: tone.fill, stroke: tone.edge, strokeWidth: 1 });
+    // L 型沙发不是一块矩形：它自己会拼出两条互相垂直的身体，
+    // 先别铺整块底板，否则凹口那块地板会被一起涂掉。
+    const lShaped = detail === 'sofa-l';
 
-    // 受光 + 落影：只沿上下各一条窄带。家具因此有了"顶面 + 一条立边"，
-    // 而不是一张纯色卡片；方向与墙体、柜子的投影保持一致（光从左上来）。
-    const bevel = Math.max(1.2, Math.min(3, h * 0.13));
-    rect(pad, pad, Math.max(0, w - pad * 2), bevel, {
-        rx: bevel / 2,
-        fill: tone.light,
-        opacity: 0.85,
-    });
-    rect(
-        pad,
-        Math.max(pad, h - pad - bevel * 0.72),
-        Math.max(0, w - pad * 2),
-        Math.max(0, bevel * 0.72),
-        {
+    // 本体。
+    if (!lShaped) {
+        rect(0, 0, w, h, { rx: radius, fill: tone.fill, stroke: tone.edge, strokeWidth: 1 });
+
+        // 受光 + 落影：只沿上下各一条窄带。家具因此有了"顶面 + 一条立边"，
+        // 而不是一张纯色卡片；方向与墙体、柜子的投影保持一致（光从左上来）。
+        const bevel = Math.max(1.2, Math.min(3, h * 0.13));
+        rect(pad, pad, Math.max(0, w - pad * 2), bevel, {
             rx: bevel / 2,
-            fill: tone.base,
-            opacity: 0.7,
-        },
-    );
+            fill: tone.light,
+            opacity: 0.85,
+        });
+        rect(
+            pad,
+            Math.max(pad, h - pad - bevel * 0.72),
+            Math.max(0, w - pad * 2),
+            Math.max(0, bevel * 0.72),
+            {
+                rx: bevel / 2,
+                fill: tone.base,
+                opacity: 0.7,
+            },
+        );
+    }
 
     if (detail === 'bed') {
         // 床头板 + 两个枕头 + 被子 + 被面褶皱 + 床尾压毯。
@@ -686,6 +842,148 @@ export function furnitureDrawing(box: FurnitureBox): FurnitureDrawing {
             rx: 1.4,
             fill: tone.base,
             opacity: 0.55,
+        });
+    } else if (detail === 'sofa-l') {
+        // L 型转角沙发：长边 + 贵妃位两块圆角身体拼成一个 L，凹口留空。
+        // 长边靠墙、贵妃位在外侧，是住宅里最常见的那一种摆法。
+        const longDepth = h * 0.56;
+        const chaiseWide = w * 0.46;
+        const arm = Math.min(w * 0.07, 11);
+        const plate = Math.min(9, Math.max(3, w * 0.055));
+        rect(0, 0, w, longDepth, {
+            rx: radius,
+            fill: tone.fill,
+            stroke: tone.edge,
+            strokeWidth: 1,
+        });
+        rect(w - chaiseWide, longDepth - 0.6, chaiseWide, Math.max(0, h - longDepth + 0.6), {
+            rx: radius,
+            fill: tone.fill,
+            stroke: tone.edge,
+            strokeWidth: 1,
+        });
+        // 两块身体拼在一起时，接缝处会各留半条描边，看着像两条沙发叠着。
+        // 用一条同色窄带把接缝盖掉，L 才是一整件家具。
+        const seam = Math.max(1, Math.min(2.2, longDepth * 0.06));
+        rect(
+            w - chaiseWide + plate,
+            longDepth - seam,
+            Math.max(1, chaiseWide - plate * 2),
+            seam * 2,
+            {
+                fill: tone.fill,
+            },
+        );
+        // 受光 / 落影：长边上沿一条亮带，贵妃位下沿一条暗带。
+        rect(pad, pad, Math.max(0, w - pad * 2), Math.max(1, longDepth * 0.14), {
+            rx: 1.4,
+            fill: tone.light,
+            opacity: 0.85,
+        });
+        rect(
+            w - chaiseWide + pad,
+            h - pad - Math.max(1, h * 0.06),
+            Math.max(0, chaiseWide - pad * 2),
+            Math.max(1, h * 0.06),
+            { rx: 1.4, fill: tone.base, opacity: 0.7 },
+        );
+        // 靠背压住整条长边；贵妃位外侧再补一条背板，人躺下才有得靠。
+        const back = Math.min(longDepth * 0.36, 13);
+        rect(pad, pad, Math.max(0, w - pad * 2), back, {
+            rx: Math.min(4, back * 0.6),
+            fill: tone.base,
+            stroke: tone.edge,
+            strokeWidth: 0.85,
+        });
+        rect(w - pad - plate, longDepth, plate, Math.max(0, h - longDepth - pad), {
+            rx: Math.min(2.4, plate * 0.4),
+            fill: tone.base,
+            stroke: tone.edge,
+            strokeWidth: 0.8,
+        });
+        // 左扶手。
+        rect(pad, pad, arm, Math.max(1, longDepth - pad * 2), {
+            rx: Math.min(3, arm * 0.4),
+            fill: tone.base,
+            stroke: tone.edge,
+            strokeWidth: 0.8,
+        });
+        // 长边两个坐垫 + 贵妃位一整块长坐垫。
+        const seatX = pad + arm + 1.2;
+        const seatY = pad + back + 1.2;
+        const seatW = Math.max(2, (w - seatX - pad - 1.2 - 1.6) / 2);
+        const seatH = Math.max(2, longDepth - seatY - pad - 0.6);
+        for (let i = 0; i < 2; i += 1) {
+            rect(seatX + i * (seatW + 1.6), seatY, seatW, seatH, {
+                rx: Math.min(3, seatH * 0.2),
+                fill: tone.light,
+                stroke: tone.ink,
+                strokeWidth: 0.65,
+            });
+        }
+        const chaiseX = w - chaiseWide + pad + 1.2;
+        const chaiseY = longDepth + 1.6;
+        rect(
+            chaiseX,
+            chaiseY,
+            Math.max(2, w - pad - plate - 1.2 - chaiseX),
+            Math.max(2, h - pad - 1.2 - chaiseY),
+            {
+                rx: Math.min(3, chaiseWide * 0.14),
+                fill: tone.light,
+                stroke: tone.ink,
+                strokeWidth: 0.65,
+            },
+        );
+        // 贵妃位上扔一只抱枕。
+        const pillow = Math.max(3, Math.min((h - longDepth) * 0.42, 10));
+        rect(chaiseX + 1.2, chaiseY + 1.2, pillow, pillow, {
+            rx: 1.6,
+            fill: tone.base,
+            stroke: tone.ink,
+            strokeWidth: 0.5,
+            opacity: 0.9,
+        });
+    } else if (detail === 'chaise') {
+        // 贵妃榻：靠背压在长边一侧，一整块软包坐垫 + 一只抱枕 + 一端小扶手。
+        const back = Math.min(h * 0.32, 13);
+        const arm = Math.min(w * 0.06, 9);
+        rect(pad, pad, Math.max(0, w - pad * 2), back, {
+            rx: radius,
+            fill: tone.base,
+            stroke: tone.edge,
+            strokeWidth: 0.85,
+        });
+        rect(pad, pad, arm, Math.max(1, h - pad * 2), {
+            rx: Math.min(3, arm * 0.4),
+            fill: tone.base,
+            stroke: tone.edge,
+            strokeWidth: 0.8,
+        });
+        const seatX = pad + arm + 1.2;
+        const seatY = pad + back + 1.2;
+        const seatW = Math.max(2, w - seatX - pad - 1.2);
+        const seatH = Math.max(2, h - seatY - pad - 1.2);
+        rect(seatX, seatY, seatW, seatH, {
+            rx: Math.min(3, seatH * 0.18),
+            fill: tone.light,
+            stroke: tone.ink,
+            strokeWidth: 0.65,
+        });
+        // 软包两道缝，看得出是一整条躺位而不是一个方垫子。
+        for (const ratio of [0.36, 0.7]) {
+            line(seatX + seatW * ratio, seatY + 1, seatX + seatW * ratio, seatY + seatH - 1, {
+                strokeWidth: 0.5,
+                opacity: 0.35,
+            });
+        }
+        const pillow = Math.max(3, Math.min(seatH * 0.6, 11));
+        rect(seatX + 1.4, seatY + 1.2, pillow, pillow, {
+            rx: 1.6,
+            fill: tone.base,
+            stroke: tone.ink,
+            strokeWidth: 0.5,
+            opacity: 0.9,
         });
     } else if (detail === 'sofa') {
         // 靠背 + 两侧扶手 + 分块坐垫 + 两个抱枕。
@@ -837,6 +1135,91 @@ export function furnitureDrawing(box: FurnitureBox): FurnitureDrawing {
             opacity: 0.7,
         });
         oval(cx - r * 0.3, cy - r * 0.32, r * 0.2, r * 0.14, { fill: '#ffffff', opacity: 0.5 });
+    } else if (detail === 'bench') {
+        // 床尾凳 / 换鞋凳：一圈软包缝 + 四只矮脚，比桌子少一层桌面线、比柜子少门缝。
+        const inset = Math.min(2.2, tiny * 0.1);
+        const boardW = Math.max(1, w - inset * 2);
+        const boardH = Math.max(1, h - inset * 2);
+        rect(inset, inset, boardW, boardH, {
+            rx: Math.min(4, tiny * 0.22),
+            fill: tone.light,
+            stroke: tone.ink,
+            strokeWidth: 0.6,
+            opacity: 0.85,
+        });
+        const seams = w > 60 ? 3 : 2;
+        for (let i = 1; i < seams; i += 1) {
+            const x = inset + (boardW * i) / seams;
+            line(x, inset + 0.8, x, h - inset - 0.8, { strokeWidth: 0.5, opacity: 0.35 });
+        }
+        // 凳面下沿一条影子，免得像一张纸。
+        rect(inset, h - inset - Math.max(1, h * 0.12), boardW, Math.max(1, h * 0.12), {
+            rx: 1,
+            fill: tone.base,
+            opacity: 0.5,
+        });
+        const legR = Math.max(0.7, tiny * 0.05);
+        for (const [cx, cy] of [
+            [inset * 0.9, inset * 0.9],
+            [w - inset * 0.9, h - inset * 0.9],
+        ] as [number, number][]) {
+            oval(cx, cy, legR, legR, { fill: tone.base, stroke: tone.edge, strokeWidth: 0.5 });
+        }
+    } else if (detail === 'dressing') {
+        // 梳妆台：后沿一条镜面，下面两排抽屉缝 + 把手。
+        const inset = Math.min(2.4, tiny * 0.09);
+        rect(inset, inset, Math.max(1, w - inset * 2), Math.max(1, h - inset * 2), {
+            rx: 1.4,
+            fill: 'none',
+            stroke: tone.ink,
+            strokeWidth: 0.75,
+            opacity: 0.5,
+        });
+        const mirrorH = Math.max(2, h * 0.26);
+        rect(inset * 1.6, inset * 0.8, Math.max(1, w - inset * 3.2), mirrorH, {
+            rx: 1,
+            fill: tone.light,
+            stroke: tone.edge,
+            strokeWidth: 0.7,
+        });
+        line(w * 0.3, inset * 0.8 + mirrorH * 0.55, w * 0.6, inset * 0.8 + mirrorH * 0.55, {
+            stroke: tone.ink,
+            strokeWidth: 0.5,
+            opacity: 0.35,
+        });
+        const drawerTop = inset * 0.8 + mirrorH + Math.max(1.4, h * 0.05);
+        const drawerH = Math.max(1, (h - inset - drawerTop) / 2);
+        for (let i = 0; i < 2; i += 1) {
+            const y = drawerTop + i * drawerH;
+            line(inset, y, w - inset, y, { strokeWidth: 0.7, opacity: 0.5 });
+            line(w * 0.42, y + drawerH * 0.5, w * 0.58, y + drawerH * 0.5, { strokeWidth: 1.1 });
+        }
+    } else if (detail === 'mirror') {
+        // 穿衣镜：一薄片镜面 + 两道斜向反光 + 一条托底，看得出是立着靠墙的。
+        rect(pad, pad, Math.max(1, w - pad * 2), Math.max(1, h - pad * 2), {
+            rx: Math.min(3, tiny * 0.2),
+            fill: tone.fill,
+            stroke: tone.edge,
+            strokeWidth: 0.9,
+        });
+        rect(pad * 2.2, pad * 2.2, Math.max(1, w - pad * 4.4), Math.max(1, h - pad * 4.4), {
+            rx: Math.min(2, tiny * 0.14),
+            fill: tone.light,
+            stroke: tone.ink,
+            strokeWidth: 0.5,
+            opacity: 0.8,
+        });
+        line(pad * 3.4, h - pad * 3, w * 0.46, pad * 3, {
+            stroke: '#ffffff',
+            strokeWidth: 1.1,
+            opacity: 0.7,
+        });
+        line(pad * 3.4, h - pad * 2.2, w * 0.62, pad * 2.4, {
+            stroke: '#ffffff',
+            strokeWidth: 0.7,
+            opacity: 0.45,
+        });
+        line(pad, h - pad * 0.4, w - pad, h - pad * 0.4, { strokeWidth: 1.3, opacity: 0.5 });
     } else if (detail === 'table') {
         // 桌面：内缩一圈桌沿 + 四角桌腿 + 一道木纹。
         const inset = Math.min(w, h) * 0.09;
