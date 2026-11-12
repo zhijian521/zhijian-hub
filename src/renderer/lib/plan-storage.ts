@@ -13,8 +13,13 @@
   纯函数、零运行时依赖：node:test 里可以直接跑。
 ============================================================================*/
 
-import type { Room, StorageDevice, StorageKind } from '@/app/types';
-import { isSideways, normalizeRotation, type FurnitureRotation } from './furniture-catalog.ts';
+import type { Room, StorageDevice, StorageKind, WallSide } from '@/app/types';
+import {
+    hasBack,
+    isSideways,
+    normalizeRotation,
+    type FurnitureRotation,
+} from './furniture-catalog.ts';
 
 export interface StorageBox {
     id: string;
@@ -133,6 +138,117 @@ export function layoutStorage(rooms: Room[], storage: StorageDevice[]): StorageB
         }
     }
     return boxes;
+}
+
+/** 离墙多近才「吸附」成一堵墙上的家具（画板坐标，12px = 200 mm）。 */
+export const WALL_SNAP = 12;
+
+/** 靠墙摆放的结果：贴墙后的占地框 + 该用哪个朝向。 */
+export interface WallSnap {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: FurnitureRotation;
+    wall: WallSide;
+}
+
+/** 靠上哪面墙，背板就该朝哪面墙。 */
+const WALL_ROTATION: Record<WallSide, FurnitureRotation> = {
+    top: 0,
+    bottom: 180,
+    left: 270,
+    right: 90,
+};
+
+/** 家具本体的宽深（局部坐标系），与占地框在 90 / 270 时对调。 */
+function bodySize(box: { width: number; height: number; rotation: number }) {
+    return isSideways(box.rotation)
+        ? { width: box.height, height: box.width }
+        : { width: box.width, height: box.height };
+}
+
+/** 给定朝向，算出占地框的宽深。 */
+function footprintOf(body: { width: number; height: number }, rotation: FurnitureRotation) {
+    return isSideways(rotation)
+        ? { width: body.height, height: body.width }
+        : { width: body.width, height: body.height };
+}
+
+/**
+ * 靠墙摆放：家具离哪面墙最近、且近到阈值以内，就把它贴上去，
+ * 并且让背板朝墙（床头板、沙发靠背、柜门背面贴着墙才像真摆过）。
+ *
+ * 几个刻意的取舍：
+ *   · 只贴最近的一面墙，不猜角落——猜错比不贴更让人恼火；
+ *   · 对称的家具（桌、椅、地毯、绿植、灯）只贴位置不转朝向，
+ *     转它们只会平白换掉占地宽深；
+ *   · 转过来塞不进这间房就放弃吸附，宁可维持用户松手的位置。
+ */
+export function snapFurnitureToWall(
+    room: Room,
+    box: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        rotation: number;
+        preset?: string | null;
+    },
+    options: { threshold?: number; faceWall?: boolean } = {},
+): WallSnap | null {
+    if (!Number.isFinite(box.x) || !Number.isFinite(box.y)) return null;
+    const threshold = options.threshold ?? WALL_SNAP;
+    const rotation = normalizeRotation(box.rotation);
+    const gaps: { wall: WallSide; gap: number }[] = [
+        { wall: 'top', gap: box.y - room.y },
+        { wall: 'bottom', gap: room.y + room.height - (box.y + box.height) },
+        { wall: 'left', gap: box.x - room.x },
+        { wall: 'right', gap: room.x + room.width - (box.x + box.width) },
+    ];
+    let nearest = gaps[0]!;
+    for (const entry of gaps) if (entry.gap < nearest.gap) nearest = entry;
+    // 贴在房间外面（负距离）也算「在墙边」：拖太快时家具被甩出一点边界，
+    // 这时候吸附正好把它拉回来。
+    if (nearest.gap > threshold) return null;
+
+    const body = bodySize(box);
+    const nextRotation =
+        (options.faceWall ?? true) && hasBack(box.preset) ? WALL_ROTATION[nearest.wall] : rotation;
+    const footprint = footprintOf(body, nextRotation);
+    if (footprint.width > room.width + 0.01 || footprint.height > room.height + 0.01) {
+        // 转过来塞不下就退回「不转、只贴墙」。
+        const plain = footprintOf(body, rotation);
+        if (plain.width > room.width + 0.01 || plain.height > room.height + 0.01) return null;
+        return placeAgainst(room, box, plain, rotation, nearest.wall);
+    }
+    return placeAgainst(room, box, footprint, nextRotation, nearest.wall);
+}
+
+/** 贴到某面墙上：那一侧归零，另一个方向保住中心点。 */
+function placeAgainst(
+    room: Room,
+    box: { x: number; y: number; width: number; height: number },
+    footprint: { width: number; height: number },
+    rotation: FurnitureRotation,
+    wall: WallSide,
+): WallSnap {
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    let x = centerX - footprint.width / 2;
+    let y = centerY - footprint.height / 2;
+    if (wall === 'top') y = room.y;
+    if (wall === 'bottom') y = room.y + room.height - footprint.height;
+    if (wall === 'left') x = room.x;
+    if (wall === 'right') x = room.x + room.width - footprint.width;
+    return {
+        x: clamp(x, room.x, room.x + room.width - footprint.width),
+        y: clamp(y, room.y, room.y + room.height - footprint.height),
+        width: footprint.width,
+        height: footprint.height,
+        rotation,
+        wall,
+    };
 }
 
 /** 家具自己报的「宽 × 深」：侧过来摆时占地宽深是对调的，

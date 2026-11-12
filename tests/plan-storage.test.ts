@@ -7,7 +7,9 @@ import {
     layoutStorage,
     placedBox,
     roomAtPoint,
+    snapFurnitureToWall,
     storageBoxOf,
+    WALL_SNAP,
 } from '../src/renderer/lib/plan-storage.ts';
 import type { Room, StorageDevice } from '../src/renderer/app/types.ts';
 
@@ -226,5 +228,140 @@ describe('plan-storage · 摆过的家具', () => {
         assert.equal(roomAtPoint(rooms, 150, 100)?.id, 'r1');
         assert.equal(roomAtPoint(rooms, 380, 100)?.id, 'r2');
         assert.equal(roomAtPoint(rooms, 0, 0), null);
+    });
+});
+
+describe('plan-storage · 靠墙吸附', () => {
+    // 主卧 216×216，原点在 (100, 50)：可用边界是 100–316 / 50–266。
+    const master = room('r1', '主卧');
+
+    it('离墙够近就贴上去，并把背板转向那面墙', () => {
+        // 衣柜 108×36 放在离顶墙 6px 的位置：贴上去 y 归零、背板朝上（0°）。
+        const top = snapFurnitureToWall(master, {
+            x: 150,
+            y: 56,
+            width: 108,
+            height: 36,
+            rotation: 0,
+            preset: 'wardrobe',
+        })!;
+        assert.equal(top.wall, 'top');
+        assert.equal(top.y, master.y);
+        assert.equal(top.rotation, 0);
+        // 落在底墙：背板朝下，也就是 180°，占地宽深不变。
+        const bottom = snapFurnitureToWall(master, {
+            x: 150,
+            y: 266 - 36 - 5,
+            width: 108,
+            height: 36,
+            rotation: 0,
+            preset: 'wardrobe',
+        })!;
+        assert.equal(bottom.wall, 'bottom');
+        assert.equal(bottom.y + bottom.height, master.y + master.height);
+        assert.equal(bottom.rotation, 180);
+        // 落在左墙：背板朝左，转 270°，占地宽深对调成 36×108。
+        const left = snapFurnitureToWall(master, {
+            x: 104,
+            y: 120,
+            width: 108,
+            height: 36,
+            rotation: 0,
+            preset: 'wardrobe',
+        })!;
+        assert.equal(left.wall, 'left');
+        assert.equal(left.x, master.x);
+        assert.equal(left.rotation, 270);
+        assert.deepEqual([left.width, left.height], [36, 108]);
+        // 落在右墙：背板朝右，转 90°。
+        const right = snapFurnitureToWall(master, {
+            x: 316 - 108 - 4,
+            y: 120,
+            width: 108,
+            height: 36,
+            rotation: 0,
+            preset: 'wardrobe',
+        })!;
+        assert.equal(right.wall, 'right');
+        assert.equal(right.rotation, 90);
+        assert.equal(right.x + right.width, master.x + master.width);
+    });
+
+    it('离墙太远就不吸附：不猜用户想要哪面墙', () => {
+        const far = snapFurnitureToWall(master, {
+            x: 180,
+            y: 150,
+            width: 60,
+            height: 36,
+            rotation: 0,
+            preset: 'wardrobe',
+        });
+        assert.equal(far, null);
+        // 阈值可以调：放宽到 120px 就贴上了。这个位置离右墙最近（76px），
+        // 所以贴的是右墙而不是更远的顶墙（100px）/ 底墙与左墙（80px）。
+        assert.equal(
+            snapFurnitureToWall(
+                master,
+                { x: 180, y: 150, width: 60, height: 36, rotation: 0, preset: 'wardrobe' },
+                { threshold: 120 },
+            )?.wall,
+            'right',
+        );
+        assert.ok(WALL_SNAP > 0);
+    });
+
+    it('桌子椅子地毯这类对称家具只贴位置、不转朝向', () => {
+        // 餐桌 84×48 贴顶墙：位置归零，但仍是 0°（转它只会平白换掉宽深）。
+        const table = snapFurnitureToWall(master, {
+            x: 150,
+            y: 53,
+            width: 84,
+            height: 48,
+            rotation: 0,
+            preset: 'dining-table',
+        })!;
+        assert.equal(table.wall, 'top');
+        assert.equal(table.rotation, 0);
+        assert.deepEqual([table.width, table.height], [84, 48]);
+        // 明确说 faceWall: false 时，有背板的柜子也不转。
+        const plain = snapFurnitureToWall(
+            master,
+            { x: 104, y: 120, width: 108, height: 36, rotation: 0, preset: 'wardrobe' },
+            { faceWall: false },
+        )!;
+        assert.equal(plain.rotation, 0);
+        assert.deepEqual([plain.width, plain.height], [108, 36]);
+    });
+
+    it('转过来塞不进房间就退回「只贴墙、不转」', () => {
+        // 一条又窄又高的房间：180×60。衣柜 150×40 贴左墙要转成 40 宽 150 深，塞不进 60 的净高。
+        const narrow: Room = { ...room('n', '窄间', 180, 60), x: 0, y: 0 };
+        const snap = snapFurnitureToWall(narrow, {
+            x: 3,
+            y: 10,
+            width: 150,
+            height: 40,
+            rotation: 0,
+            preset: 'wardrobe',
+        });
+        assert.ok(snap, '应该退回「不转、只贴墙」而不是放弃');
+        assert.equal(snap!.rotation, 0);
+        assert.equal(snap!.x, narrow.x);
+    });
+
+    it('吸附结果永远落在房间内，且离墙那一侧严格贴边', () => {
+        const cases: { x: number; y: number; width: number; height: number }[] = [
+            { x: 102, y: 200, width: 108, height: 36 },
+            { x: 310, y: 200, width: 108, height: 36 },
+            { x: 200, y: 52, width: 60, height: 30 },
+            { x: 200, y: 262, width: 60, height: 30 },
+        ];
+        for (const entry of cases) {
+            const snap = snapFurnitureToWall(master, { ...entry, rotation: 0, preset: 'wardrobe' });
+            assert.ok(snap, JSON.stringify(entry) + ' 应该吸附');
+            assert.ok(snap!.x >= master.x - 0.01 && snap!.y >= master.y - 0.01);
+            assert.ok(snap!.x + snap!.width <= master.x + master.width + 0.01);
+            assert.ok(snap!.y + snap!.height <= master.y + master.height + 0.01);
+        }
     });
 });

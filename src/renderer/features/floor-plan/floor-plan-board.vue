@@ -24,12 +24,13 @@ import type {
     FloorMaterial,
     Opening,
     Room,
+    WallSide,
     StorageDevice,
     StorageKind,
     StoredItem,
-    WallSide,
 } from '@/app/types';
 import FloatCard from '@/components/float-card.vue';
+import FurnitureShapes from './furniture-shapes.vue';
 import {
     BAY_DEPTH_MAX,
     BAY_DEPTH_MIN,
@@ -62,12 +63,14 @@ import {
     MAX_FURNITURE_SIDE,
     MIN_FURNITURE_SIZE,
     roomAtPoint,
+    snapFurnitureToWall,
     type StorageBox,
 } from '@/lib/plan-storage';
 import {
     FURNITURE_GROUPS,
     FURNITURE_PRESETS,
     furnitureDrawing,
+    isThinFurniture,
     isSideways,
     normalizeRotation,
     presetOf,
@@ -236,6 +239,8 @@ const storageViews = computed(() =>
             drawing,
             transform: furnitureTransform(box, drawing),
             preset: presetOf(box.preset),
+            // 电视、地毯这类「贴地薄片」投影要压淡，否则看着比柜子还厚。
+            thin: isThinFurniture(box.preset, Math.min(box.width, box.height)),
         };
     }),
 );
@@ -512,6 +517,10 @@ interface FurnitureDrop {
     y: number;
     width: number;
     height: number;
+    /** 松手时会不会靠到墙上；预览据此多画一条贴墙的实线。 */
+    snapped: WallSide | null;
+    /** 吸附后该用的朝向（背板朝墙）。 */
+    rotation: FurnitureRotation;
     legal: boolean;
 }
 const furnitureDrag = ref<{ preset: FurniturePreset; drop: FurnitureDrop | null } | null>(null);
@@ -525,7 +534,8 @@ function boardPoint(event: PointerEvent) {
     };
 }
 
-/** 算出这件家具如果现在松手会落在哪：以指针为中心，尺寸取原型的真实尺寸。 */
+/** 算出这件家具如果现在松手会落在哪：以指针为中心，尺寸取原型的真实尺寸。
+ *  离墙够近就吸附上去，并且把背板转向那面墙——和真实摆放一致。 */
 function dropAt(preset: FurniturePreset, event: PointerEvent): FurnitureDrop | null {
     const point = boardPoint(event);
     if (!point) return null;
@@ -534,9 +544,27 @@ function dropAt(preset: FurniturePreset, event: PointerEvent): FurnitureDrop | n
         y: point.y - preset.height / 2,
         width: preset.width,
         height: preset.height,
+        rotation: 0,
+        preset: preset.id,
     };
     const room = roomAtPoint(rooms.value, point.x, point.y);
-    return { room, ...box, legal: room ? boxInsideRoom(room, box) : false };
+    if (!room) return { room: null, ...box, snapped: null, rotation: 0, legal: false };
+    // 阈值是物理距离（200 mm），不随缩放变：放大时不该更容易贴墙。
+    const snapped = snapFurnitureToWall(room, box);
+    const placed = snapped ?? { ...box, snapped: null, rotation: 0 };
+    const final = {
+        x: placed.x,
+        y: placed.y,
+        width: placed.width,
+        height: placed.height,
+    };
+    return {
+        room,
+        ...final,
+        snapped: 'wall' in placed ? placed.wall : null,
+        rotation: placed.rotation,
+        legal: boxInsideRoom(room, final),
+    };
 }
 
 function moveFurnitureDrag(event: PointerEvent) {
@@ -586,12 +614,24 @@ async function endFurnitureDrag(event: PointerEvent) {
         y: drop.y,
         width: drop.width,
         height: drop.height,
-        rotation: 0,
+        // 靠墙放下时背板已经转到墙上，朝向要一起存下来。
+        rotation: drop.rotation,
     });
     if (ok) {
         furnitureNotice.value = '';
         furnitureRoomId.value = drop.room.id;
     }
+}
+
+/** 吸附到墙时，在贴着的那条边上画一段加粗线：让"已经贴上墙了"有明确信号，
+    而不只是家具自己变了个朝向。 */
+function snapMark(drop: FurnitureDrop): { x1: number; y1: number; x2: number; y2: number } | null {
+    if (!drop.snapped) return null;
+    const { x, y, width, height } = drop;
+    if (drop.snapped === 'top') return { x1: x, y1: y, x2: x + width, y2: y };
+    if (drop.snapped === 'bottom') return { x1: x, y1: y + height, x2: x + width, y2: y + height };
+    if (drop.snapped === 'left') return { x1: x, y1: y, x2: x, y2: y + height };
+    return { x1: x + width, y1: y, x2: x + width, y2: y + height };
 }
 
 /** 拖拽中的跟手预览：位置合法用品牌色，压到墙上用警示色。 */
@@ -601,16 +641,26 @@ const furnitureGhost = computed(() => {
     // 否则用户会以为"按下去没反应"。
     if (!current?.drop) return null;
     const drop = current.drop;
+    const drawing = furnitureDrawing({
+        preset: current.preset.id,
+        width: drop.width,
+        height: drop.height,
+        rotation: drop.rotation,
+    });
+    const cx = drop.x + drop.width / 2;
+    const cy = drop.y + drop.height / 2;
     return {
         x: drop.x,
         y: drop.y,
         width: drop.width,
         height: drop.height,
-        drawing: furnitureDrawing({
-            preset: current.preset.id,
-            width: drop.width,
-            height: drop.height,
-        }),
+        drawing,
+        // 预览也按真实朝向画：贴到墙上时能立刻看出背板转过去了。
+        transform:
+            drop.rotation === 0
+                ? `translate(${drop.x} ${drop.y})`
+                : `translate(${cx} ${cy}) rotate(${drop.rotation}) translate(${-drawing.localWidth / 2} ${-drawing.localHeight / 2})`,
+        mark: snapMark(drop),
         ink: drop.legal ? 'var(--brand)' : 'var(--danger)',
         wash: drop.legal ? 'var(--brand-soft)' : 'var(--danger-soft)',
     };
@@ -841,7 +891,9 @@ interface FurnitureMove {
     dy: number;
     width: number;
     height: number;
-    rotation: number;
+    rotation: FurnitureRotation;
+    /** 原型 id：靠墙吸附时用它判断有没有背板。 */
+    preset: string | null;
     drop: FurnitureDrop | null;
 }
 const furnitureMove = ref<FurnitureMove | null>(null);
@@ -854,10 +906,24 @@ function moveDropAt(current: FurnitureMove, event: PointerEvent): FurnitureDrop 
         y: point.y + current.dy,
         width: current.width,
         height: current.height,
+        rotation: current.rotation,
+        preset: current.preset,
     };
     // 用家具中心找房间：跨界拖动时最直观 —— 一半压过墙就换隔壁那间。
-    const room = roomAtPoint(rooms.value, box.x + box.width / 2, box.y + box.height / 2);
-    return { room, ...box, legal: room ? boxInsideRoom(room, box) : false };
+    const center = roomAtPoint(rooms.value, box.x + box.width / 2, box.y + box.height / 2);
+    if (!center)
+        return { room: null, ...box, snapped: null, rotation: current.rotation, legal: false };
+    // 已经转过的家具不改朝向：用户明确转过 90° 就按他的意思贴墙，别偷偷转回去。
+    const snapped = snapFurnitureToWall(center, box, { faceWall: current.rotation === 0 });
+    const placed = snapped ?? { ...box, snapped: null, rotation: current.rotation };
+    const final = { x: placed.x, y: placed.y, width: placed.width, height: placed.height };
+    return {
+        room: center,
+        ...final,
+        snapped: 'wall' in placed ? placed.wall : null,
+        rotation: placed.rotation,
+        legal: boxInsideRoom(center, final),
+    };
 }
 
 function onMoveMove(event: PointerEvent) {
@@ -897,9 +963,9 @@ async function endFurnitureMove(event: PointerEvent) {
         current.id,
         Math.round(drop.x),
         Math.round(drop.y),
-        current.width,
-        current.height,
-        current.rotation,
+        Math.round(drop.width),
+        Math.round(drop.height),
+        drop.rotation,
         drop.room.id,
     );
 }
@@ -920,6 +986,7 @@ function startFurnitureMove(device: StorageDevice, event: PointerEvent) {
         width: box.width,
         height: box.height,
         rotation: box.rotation,
+        preset: box.preset,
         drop: null,
     };
     window.addEventListener('pointermove', onMoveMove);
@@ -932,9 +999,27 @@ const furnitureMoveGhost = computed(() => {
     const current = furnitureMove.value;
     const box = current ? storageBoxes.value.find((entry) => entry.id === current.id) : null;
     if (!current?.drop || !box) return null;
+    const drop = current.drop;
+    // 跟手预览画真家具而不是空框：吸附转过身后，能立刻看出家具是横着还是竖着。
+    const drawing = furnitureDrawing({
+        preset: box.preset,
+        width: drop.width,
+        height: drop.height,
+        rotation: drop.rotation,
+    });
+    const cx = drop.x + drop.width / 2;
+    const cy = drop.y + drop.height / 2;
     return {
         from: { x: box.x, y: box.y, width: box.width, height: box.height },
-        drop: current.drop,
+        drop,
+        drawing,
+        transform:
+            drop.rotation === 0
+                ? `translate(${drop.x} ${drop.y})`
+                : `translate(${cx} ${cy}) rotate(${drop.rotation}) translate(${-drawing.localWidth / 2} ${-drawing.localHeight / 2})`,
+        mark: snapMark(drop),
+        ink: drop.legal ? 'var(--brand)' : 'var(--danger)',
+        wash: drop.legal ? 'var(--brand-soft)' : 'var(--danger-soft)',
     };
 });
 
@@ -1518,15 +1603,17 @@ async function exportSvg() {
                                 fill="transparent"
                                 pointer-events="all"
                             />
-                            <!-- 家具也落一层淡影，和墙体的光影方向保持一致（右下偏移） -->
+                            <!-- 家具也落一层淡影，和墙体的光影方向保持一致（右下偏移）。
+                                 厚度决定影子的强度：柜子床这种立体会压出明显的边，
+                                 电视地毯贴地薄片只留一丝，否则它们看着比衣柜还厚。 -->
                             <rect
-                                :x="view.box.x + 1.6 / zoom"
-                                :y="view.box.y + 2.2 / zoom"
+                                :x="view.box.x + (view.thin ? 0.8 : 1.6) / zoom"
+                                :y="view.box.y + (view.thin ? 1 : 2.2) / zoom"
                                 :width="view.box.width"
                                 :height="view.box.height"
                                 rx="1.5"
                                 fill="#1d2418"
-                                :opacity="0.16"
+                                :opacity="view.thin ? 0.07 : 0.16"
                                 pointer-events="none"
                             />
                             <g
@@ -1534,46 +1621,7 @@ async function exportSvg() {
                                 :data-selected="view.box.id === activeStorageId"
                                 pointer-events="none"
                             >
-                                <template
-                                    v-for="(shape, index) in view.drawing.shapes"
-                                    :key="index"
-                                >
-                                    <rect
-                                        v-if="shape.kind === 'rect'"
-                                        :x="shape.x"
-                                        :y="shape.y"
-                                        :width="shape.width"
-                                        :height="shape.height"
-                                        :rx="shape.rx"
-                                        :fill="shape.fill ?? 'none'"
-                                        :stroke="shape.stroke ?? 'none'"
-                                        :stroke-width="shape.strokeWidth ?? 0"
-                                        :opacity="shape.opacity ?? 1"
-                                    />
-                                    <ellipse
-                                        v-else-if="shape.kind === 'ellipse'"
-                                        :cx="shape.cx"
-                                        :cy="shape.cy"
-                                        :rx="shape.rx"
-                                        :ry="shape.ry"
-                                        :fill="shape.fill ?? 'none'"
-                                        :stroke="shape.stroke ?? 'none'"
-                                        :stroke-width="shape.strokeWidth ?? 0"
-                                        :opacity="shape.opacity ?? 1"
-                                    />
-                                    <line
-                                        v-else
-                                        :x1="shape.x1"
-                                        :y1="shape.y1"
-                                        :x2="shape.x2"
-                                        :y2="shape.y2"
-                                        :stroke="shape.stroke ?? 'none'"
-                                        :stroke-width="shape.strokeWidth ?? 1"
-                                        :stroke-dasharray="shape.dash"
-                                        :opacity="shape.opacity ?? 1"
-                                        stroke-linecap="round"
-                                    />
-                                </template>
+                                <FurnitureShapes :shapes="view.drawing.shapes" />
                             </g>
                             <!-- 悬停 / 选中才描这一圈：家具自己的细节已经够密，
                                  常驻一圈描边会变成"每件家具都套了个框"。 -->
@@ -1627,36 +1675,66 @@ async function exportSvg() {
                             :stroke-width="1 / zoom"
                             :stroke-dasharray="`${5 / zoom} ${4 / zoom}`"
                         />
+                        <g :transform="furnitureMoveGhost.transform">
+                            <FurnitureShapes
+                                :shapes="furnitureMoveGhost.drawing.shapes"
+                                :opacity="0.5"
+                            />
+                        </g>
                         <rect
                             :x="furnitureMoveGhost.drop.x"
                             :y="furnitureMoveGhost.drop.y"
                             :width="furnitureMoveGhost.drop.width"
                             :height="furnitureMoveGhost.drop.height"
                             rx="1.5"
-                            :fill="
-                                furnitureMoveGhost.drop.legal
-                                    ? 'var(--brand-soft)'
-                                    : 'var(--danger-soft)'
-                            "
-                            :stroke="
-                                furnitureMoveGhost.drop.legal ? 'var(--brand)' : 'var(--danger)'
-                            "
+                            :fill="furnitureMoveGhost.wash"
+                            fill-opacity="0.3"
+                            :stroke="furnitureMoveGhost.ink"
                             :stroke-width="1.4 / zoom"
                             :stroke-dasharray="`${6 / zoom} ${4 / zoom}`"
                         />
+                        <line
+                            v-if="furnitureMoveGhost.mark"
+                            :x1="furnitureMoveGhost.mark.x1"
+                            :y1="furnitureMoveGhost.mark.y1"
+                            :x2="furnitureMoveGhost.mark.x2"
+                            :y2="furnitureMoveGhost.mark.y2"
+                            :stroke="furnitureMoveGhost.ink"
+                            :stroke-width="3 / zoom"
+                            stroke-linecap="round"
+                        />
                     </g>
                     <g v-if="furnitureGhost" class="storage-layer" pointer-events="none">
-                        <g :transform="`translate(${furnitureGhost.x} ${furnitureGhost.y})`">
-                            <rect
-                                :width="furnitureGhost.width"
-                                :height="furnitureGhost.height"
-                                rx="1.5"
-                                :fill="furnitureGhost.wash"
-                                :stroke="furnitureGhost.ink"
-                                :stroke-width="1.4 / zoom"
-                                :stroke-dasharray="`${6 / zoom} ${4 / zoom}`"
+                        <g :transform="furnitureGhost.transform">
+                            <!-- 用真实画法而不是一个空方框：贴上墙时一眼能看出背板转过去了。 -->
+                            <FurnitureShapes
+                                :shapes="furnitureGhost.drawing.shapes"
+                                :opacity="0.55"
                             />
                         </g>
+                        <rect
+                            :x="furnitureGhost.x"
+                            :y="furnitureGhost.y"
+                            :width="furnitureGhost.width"
+                            :height="furnitureGhost.height"
+                            rx="1.5"
+                            :fill="furnitureGhost.wash"
+                            fill-opacity="0.35"
+                            :stroke="furnitureGhost.ink"
+                            :stroke-width="1.4 / zoom"
+                            :stroke-dasharray="`${6 / zoom} ${4 / zoom}`"
+                        />
+                        <!-- 贴到墙上时把那条边描实：吸附是个需要被看见的动作。 -->
+                        <line
+                            v-if="furnitureGhost.mark"
+                            :x1="furnitureGhost.mark.x1"
+                            :y1="furnitureGhost.mark.y1"
+                            :x2="furnitureGhost.mark.x2"
+                            :y2="furnitureGhost.mark.y2"
+                            :stroke="furnitureGhost.ink"
+                            :stroke-width="3 / zoom"
+                            stroke-linecap="round"
+                        />
                     </g>
                     <rect
                         v-if="

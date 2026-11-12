@@ -4,6 +4,8 @@ import {
     FURNITURE_GROUPS,
     FURNITURE_PRESETS,
     FURNITURE_ROTATIONS,
+    hasBack,
+    isThinFurniture,
     isSideways,
     normalizeRotation,
     furnitureDrawing,
@@ -248,5 +250,27 @@ describe('furniture-catalog · 分组与画法层次', () => {
                 assert.ok((shape.cy ?? 0) + (shape.ry ?? 0) <= size + 0.01);
             }
         }
+    });
+});
+
+describe('furniture-catalog · 背面与厚度', () => {
+    it('有背面的家具才跟着墙转：床沙发柜子书架家电', () => {
+        for (const id of ['bed-double', 'sofa', 'wardrobe', 'bookshelf', 'fridge', 'washer']) {
+            assert.equal(hasBack(id), true, id + ' 应该有背面');
+        }
+        // 桌子椅子地毯绿植灯电视摆哪面都行，转它们只会平白换掉宽深。
+        for (const id of ['dining-table', 'chair', 'rug', 'plant', 'floor-lamp', 'tv']) {
+            assert.equal(hasBack(id), false, id + ' 不该跟着墙转');
+        }
+        // 没有原型的旧家具按柜子对待：贴墙总不会错。
+        assert.equal(hasBack(null), true);
+    });
+
+    it('薄家具识别：电视地毯恒为薄，剩下靠进深 18px 兜底', () => {
+        assert.equal(isThinFurniture('tv', 20), true);
+        assert.equal(isThinFurniture('rug', 84), true);
+        assert.equal(isThinFurniture('wardrobe', 36), false);
+        assert.equal(isThinFurniture('cabinet-generic', 12), true);
+        assert.equal(isThinFurniture(null, 24), false);
     });
 });

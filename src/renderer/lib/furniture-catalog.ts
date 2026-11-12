@@ -499,6 +499,33 @@ export function isSideways(rotation: number | null | undefined): boolean {
     return value === 90 || value === 270;
 }
 
+/**
+ * 有没有「背面」——决定靠墙时要不要把背板转过去。
+ *
+ * 床（床头板）、沙发（靠背）、柜子与书架（背面朝墙）、家电（背后要留散热缝）
+ * 都有明确的正面与背面；桌子、椅子、地毯、绿植、灯、电视这些摆在哪面都行，
+ * 转它们只会平白换掉占地宽深。
+ */
+export function hasBack(presetId: string | null | undefined): boolean {
+    const preset = presetOf(presetId);
+    if (!preset) return true; // 没有原型的旧家具按柜子对待，贴墙总不会错
+    return (
+        preset.detail === 'bed' ||
+        preset.detail === 'sofa' ||
+        preset.detail === 'cabinet' ||
+        preset.detail === 'shelf' ||
+        preset.detail === 'appliance' ||
+        preset.detail === 'drum'
+    );
+}
+
+/** 很薄的家具（电视、地毯）：投影要压淡，否则看着比柜子还厚。 */
+export function isThinFurniture(presetId: string | null | undefined, depth: number): boolean {
+    const preset = presetOf(presetId);
+    if (preset && (preset.detail === 'rug' || preset.detail === 'tv')) return true;
+    return depth <= 18;
+}
+
 /** 摆放盒子：占地一律是轴对齐的矩形，转角只可能是直角，所以宽深会互换。 */
 export interface FurnitureBox {
     preset?: string | null;
